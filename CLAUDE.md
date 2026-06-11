@@ -28,5 +28,11 @@ called by the API. Frontend talks only to the API.
 - All changes go to AuditLog
 - Never hardcode secrets — use .env
 
+## Auth
+JWT via passport-jwt. Dev login at POST /api/auth/dev-login (NODE_ENV≠production only).
+SSO OIDC to be wired in prod. JwtAuthGuard + RolesGuard applied globally via APP_GUARD.
+Use @Public() to opt routes out of auth. Use @Roles(...RoleName) for RBAC.
+Use @CurrentUser() to access the authenticated user in a controller.
+
 ## Current phase
 MVP — Phase 1
