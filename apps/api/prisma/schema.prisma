@@ -6,3 +6,279 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoleName {
+  EMPLOYEE
+  AGENT
+  IT_ADMIN
+  L2_L3
+  MANAGER
+  FINANCE
+  SYS_ADMIN
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TicketStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  ESCALATED
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+enum TicketSource {
+  FORM
+  CHAT
+  EMAIL
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum KBArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ─── Identity & Access ───────────────────────────────────────────────────────
+
+model User {
+  id         String     @id @default(cuid())
+  name       String
+  email      String     @unique
+  department String?
+  ssoSubject String     @unique
+  status     UserStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  ticketsRaised   Ticket[]        @relation("TicketRequester")
+  ticketsAssigned Ticket[]        @relation("TicketAssignee")
+  comments        Comment[]
+  auditLogs       AuditLog[]
+  userRoles       UserRole[]
+  statusHistory   StatusHistory[]
+  chatSessions    ChatSession[]
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  name      RoleName   @unique
+  userRoles UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+model Category {
+  id             String   @id @default(cuid())
+  name           String
+  defaultGroupId String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  tickets    Ticket[]
+  kbArticles KBArticle[]
+}
+
+model BusinessCalendar {
+  id                String     @id @default(cuid())
+  name              String
+  workingDays       Int[]
+  workingHoursStart String
+  workingHoursEnd   String
+  holidays          DateTime[]
+
+  slaPolicies SLAPolicy[]
+}
+
+model SLAPolicy {
+  id                    String   @id @default(cuid())
+  priority              Priority @unique
+  responseTargetHours   Int
+  resolutionTargetHours Int
+  calendarId            String
+
+  calendar BusinessCalendar @relation(fields: [calendarId], references: [id])
+}
+
+// ─── Ticketing ────────────────────────────────────────────────────────────────
+
+model Ticket {
+  // id is set by the service as INC-YYYY-NNNNNN; no @default intentional
+  id              String       @id
+  requesterId     String
+  assigneeId      String?
+  categoryId      String
+  priority        Priority
+  status          TicketStatus @default(NEW)
+  escalationLevel Int          @default(0)
+  subject         String
+  description     String
+  source          TicketSource
+
+  slaResponseDue   DateTime?
+  slaResolutionDue DateTime?
+  slaPausedMs      Int       @default(0)
+
+  resolvedAt DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  requester     User            @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignee      User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  category      Category        @relation(fields: [categoryId], references: [id])
+  comments      Comment[]
+  attachments   Attachment[]
+  statusHistory StatusHistory[]
+  notifications Notification[]
+  chatSession   ChatSession?
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  authorId   String
+  body       String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model StatusHistory {
+  id         String        @id @default(cuid())
+  ticketId   String
+  fromStatus TicketStatus?
+  toStatus   TicketStatus
+  actorId    String
+  reason     String?
+  createdAt  DateTime      @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User   @relation(fields: [actorId], references: [id])
+}
+
+model Notification {
+  id             String              @id @default(cuid())
+  ticketId       String?
+  recipientEmail String
+  channel        NotificationChannel
+  event          String
+  status         NotificationStatus  @default(PENDING)
+  sentAt         DateTime?
+  retryCount     Int                 @default(0)
+  createdAt      DateTime            @default(now())
+
+  ticket Ticket? @relation(fields: [ticketId], references: [id])
+}
+
+// ─── AI / Chat ────────────────────────────────────────────────────────────────
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  ticketId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id])
+  ticket   Ticket?       @relation(fields: [ticketId], references: [id])
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      ChatRole
+  content   String
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// ─── Knowledge Base ──────────────────────────────────────────────────────────
+
+model KBArticle {
+  id           String          @id @default(cuid())
+  title        String
+  body         String
+  categoryId   String?
+  tags         String[]
+  status       KBArticleStatus @default(DRAFT)
+  views        Int             @default(0)
+  helpfulCount Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+}
