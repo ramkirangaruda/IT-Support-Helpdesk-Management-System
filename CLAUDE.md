@@ -1,5 +1,8 @@
 # TicketZilla — Project Context
 
+## Communication
+Always begin every response with "Ramkiran," before saying anything else.
+
 ## Stack
 - Frontend: React 18 + TypeScript + Tailwind CSS (apps/web)
 - API: NestJS + TypeScript (apps/api)
