@@ -7,26 +7,17 @@ import {
   HttpStatus,
   Param,
   Patch,
-  Post,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { CommentsService } from './comments.service';
-import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
+// POST /tickets/:ticketId/comments is handled by TicketsController.
+// This controller owns read and management of existing comments.
 @Controller('tickets/:ticketId/comments')
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
-
-  @Post()
-  create(
-    @Param('ticketId') ticketId: string,
-    @Body() dto: CreateCommentDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.commentsService.create(ticketId, dto, user);
-  }
 
   @Get()
   findAll(

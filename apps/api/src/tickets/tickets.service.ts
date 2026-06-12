@@ -4,40 +4,48 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, RoleName, TicketStatus } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TICKET_DETAIL_INCLUDE, TicketStateMachineService } from './ticket-state-machine.service';
+import { TICKET_COMMENT_ADDED, TicketCommentAddedEvent } from './ticket-events';
+import { AddCommentDto } from './dto/add-comment.dto';
+import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
-import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TransitionStatusDto } from './dto/transition-status.dto';
 import { ListTicketsDto } from './dto/list-tickets.dto';
+import { ResolveTicketDto } from './dto/resolve-ticket.dto';
+import { TransitionStatusDto } from './dto/transition-status.dto';
+import { UpdateTicketDto } from './dto/update-ticket.dto';
 
-// Roles that can view all tickets and manage them
-const AGENT_ROLES: RoleName[] = [
-  RoleName.AGENT,
-  RoleName.IT_ADMIN,
-  RoleName.L2_L3,
-  RoleName.MANAGER,
-  RoleName.SYS_ADMIN,
-  RoleName.FINANCE,
-];
-
-function isAgent(user: AuthenticatedUser): boolean {
-  return user.roles.some((r) => AGENT_ROLES.includes(r));
-}
-
-// Include shape for list responses (no comments/history to keep payloads small)
+// Include shape for list responses (compact — no comments or history)
 const SUMMARY_INCLUDE = {
   requester: { select: { id: true, name: true, email: true } },
   assignee:  { select: { id: true, name: true, email: true } },
   category:  { select: { id: true, name: true } },
 } satisfies Prisma.TicketInclude;
 
-// Include shape for single-ticket detail (canonical definition is in ticket-state-machine.service)
 const DETAIL_INCLUDE = TICKET_DETAIL_INCLUDE;
+
+// ── RBAC helpers ─────────────────────────────────────────────────────────────
+
+type Scope = 'all' | 'assigned' | 'own';
+
+const ALL_ROLES:      RoleName[] = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.MANAGER, RoleName.FINANCE];
+const ASSIGNED_ROLES: RoleName[] = [RoleName.AGENT, RoleName.L2_L3];
+
+function visibilityScope(user: AuthenticatedUser): Scope {
+  const roles = user.roles;
+  if (roles.some(r => ALL_ROLES.includes(r)))      return 'all';
+  if (roles.some(r => ASSIGNED_ROLES.includes(r))) return 'assigned';
+  return 'own';
+}
+
+function isAgentOrAbove(user: AuthenticatedUser): boolean {
+  return visibilityScope(user) !== 'own';
+}
 
 @Injectable()
 export class TicketsService {
@@ -46,11 +54,12 @@ export class TicketsService {
     private readonly audit: AuditService,
     private readonly stateMachine: TicketStateMachineService,
     private readonly notifications: NotificationsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  // ── INC-YYYY-NNNNNN generation ────────────────────────────────────────────
-  // Finds the highest existing sequence for the current year and increments.
-  // The unique PK constraint on Ticket.id is the safety net for race conditions.
+  // ── ID generation ─────────────────────────────────────────────────────────
+  // Uses findFirst+orderBy desc on the INC-YYYY prefix so deleted tickets
+  // don't reset the counter. PK uniqueness catches the rare race condition.
   private async generateId(): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `INC-${year}-`;
@@ -63,12 +72,8 @@ export class TicketsService {
     return `${prefix}${String(seq + 1).padStart(6, '0')}`;
   }
 
-  // ── SLA due dates (Phase 1: wall-clock hours; TODO: apply BusinessCalendar) ─
-  private slaDeadlines(
-    from: Date,
-    responseH: number,
-    resolutionH: number,
-  ): { slaResponseDue: Date; slaResolutionDue: Date } {
+  // ── SLA deadlines (wall-clock, Phase 1 — BusinessCalendar wired in Phase 2) ─
+  private slaDeadlines(from: Date, responseH: number, resolutionH: number) {
     const ms = (h: number) => h * 3_600_000;
     return {
       slaResponseDue:   new Date(from.getTime() + ms(responseH)),
@@ -76,9 +81,9 @@ export class TicketsService {
     };
   }
 
-  // ── CREATE ────────────────────────────────────────────────────────────────
+  // ── 1. CREATE ─────────────────────────────────────────────────────────────
   async create(dto: CreateTicketDto, actor: AuthenticatedUser) {
-    const id = await this.generateId();
+    const id  = await this.generateId();
     const now = new Date();
 
     const slaPolicy = await this.prisma.sLAPolicy.findUnique({
@@ -135,20 +140,28 @@ export class TicketsService {
     return ticket;
   }
 
-  // ── LIST ──────────────────────────────────────────────────────────────────
+  // ── 2. FIND ALL ───────────────────────────────────────────────────────────
+  // Visibility per RBAC matrix:
+  //   EMPLOYEE           → own raised tickets
+  //   AGENT / L2_L3      → assigned tickets
+  //   IT_ADMIN / SYS_ADMIN / MANAGER / FINANCE → all tickets
   async findAll(query: ListTicketsDto, actor: AuthenticatedUser) {
-    const { status, priority, assigneeId, requesterId, page = 1, limit = 20 } = query;
+    const { status, priority, page = 1, limit = 20 } = query;
 
     const where: Prisma.TicketWhereInput = {};
-    if (status)     where.status   = status;
-    if (priority)   where.priority = priority;
-    if (assigneeId) where.assigneeId = assigneeId;
+    if (status)   where.status   = status;
+    if (priority) where.priority = priority;
 
-    if (!isAgent(actor)) {
-      // Employees only see their own tickets
+    const scope = visibilityScope(actor);
+    if (scope === 'own') {
       where.requesterId = actor.id;
-    } else if (requesterId) {
-      where.requesterId = requesterId;
+    } else if (scope === 'assigned') {
+      where.assigneeId = actor.id;
+    }
+    // scope === 'all': honour optional filter params from query
+    if (scope === 'all') {
+      if (query.requesterId) where.requesterId = query.requesterId;
+      if (query.assigneeId)  where.assigneeId  = query.assigneeId;
     }
 
     const [data, total] = await this.prisma.$transaction([
@@ -165,7 +178,7 @@ export class TicketsService {
     return { data, total, page, limit };
   }
 
-  // ── GET ONE ───────────────────────────────────────────────────────────────
+  // ── 3. FIND ONE ───────────────────────────────────────────────────────────
   async findOne(id: string, actor: AuthenticatedUser) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
@@ -174,14 +187,134 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
 
-    if (!isAgent(actor) && ticket.requesterId !== actor.id) {
-      throw new ForbiddenException('You can only view your own tickets');
+    const scope = visibilityScope(actor);
+    if (scope === 'own'      && ticket.requesterId !== actor.id) {
+      throw new NotFoundException(`Ticket ${id} not found`);
+    }
+    if (scope === 'assigned' && ticket.assigneeId  !== actor.id) {
+      throw new NotFoundException(`Ticket ${id} not found`);
     }
 
     return ticket;
   }
 
-  // ── UPDATE METADATA ───────────────────────────────────────────────────────
+  // ── 4. ASSIGN ─────────────────────────────────────────────────────────────
+  // Atomically sets the assignee and transitions status to ASSIGNED.
+  async assign(ticketId: string, dto: AssignTicketDto, actor: AuthenticatedUser) {
+    const existing = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!existing) throw new NotFoundException(`Ticket ${ticketId} not found`);
+
+    if (!this.stateMachine.canTransition(existing.status, TicketStatus.ASSIGNED)) {
+      throw new BadRequestException(
+        `Cannot transition from ${existing.status} to ASSIGNED. Allowed: [${this.stateMachine.allowedFrom(existing.status).join(', ')}]`,
+      );
+    }
+
+    const assignee = await this.prisma.user.findUnique({ where: { id: dto.assigneeId } });
+    if (!assignee) throw new NotFoundException(`User ${dto.assigneeId} not found`);
+
+    const updated = await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        assigneeId: dto.assigneeId,
+        status:     TicketStatus.ASSIGNED,
+        statusHistory: {
+          create: {
+            fromStatus: existing.status,
+            toStatus:   TicketStatus.ASSIGNED,
+            actorId:    actor.id,
+            reason:     `Assigned to ${assignee.name ?? assignee.email}`,
+          },
+        },
+      },
+      include: DETAIL_INCLUDE,
+    });
+
+    await this.audit.log({
+      actorId:  actor.id,
+      entity:   'Ticket',
+      entityId: ticketId,
+      action:   'ASSIGN',
+      before:   { status: existing.status, assigneeId: existing.assigneeId },
+      after:    { status: TicketStatus.ASSIGNED, assigneeId: dto.assigneeId },
+    });
+
+    await this.notifications.enqueue({
+      event:          'ticket.assigned',
+      ticketId:       updated.id,
+      ticketSubject:  updated.subject,
+      requesterEmail: (updated.requester as { email: string }).email,
+      requesterName:  (updated.requester as { name: string }).name ?? 'User',
+      assigneeEmail:  (updated.assignee as { email: string }).email,
+      assigneeName:   (updated.assignee as { name: string }).name ?? null,
+    });
+
+    return updated;
+  }
+
+  // ── 5. ADD COMMENT ────────────────────────────────────────────────────────
+  // Uses EventEmitter (not BullMQ) — lightweight notification path for comments.
+  async addComment(ticketId: string, dto: AddCommentDto, actor: AuthenticatedUser) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { requester: { select: { email: true, name: true } } },
+    });
+    if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+
+    const scope = visibilityScope(actor);
+    if (scope === 'own' && ticket.requesterId !== actor.id) {
+      throw new ForbiddenException('You can only comment on your own tickets');
+    }
+
+    if (this.stateMachine.isTerminal(ticket.status)) {
+      throw new BadRequestException(`Ticket is ${ticket.status} — comments are locked`);
+    }
+
+    // Employees cannot post internal notes
+    const isInternal = scope !== 'own' ? (dto.isInternal ?? false) : false;
+
+    const comment = await this.prisma.comment.create({
+      data: {
+        ticketId,
+        authorId:   actor.id,
+        body:       dto.body,
+        isInternal,
+      },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+
+    if (!isInternal) {
+      const evt = Object.assign(new TicketCommentAddedEvent(), {
+        ticketId,
+        ticketSubject:  ticket.subject,
+        commentBody:    dto.body,
+        isInternal:     false,
+        authorEmail:    actor.email,
+        requesterEmail: ticket.requester.email,
+        requesterName:  ticket.requester.name ?? 'User',
+      });
+      this.eventEmitter.emit(TICKET_COMMENT_ADDED, evt);
+    }
+
+    return comment;
+  }
+
+  // ── 6. RESOLVE ────────────────────────────────────────────────────────────
+  async resolve(ticketId: string, dto: ResolveTicketDto, actor: AuthenticatedUser) {
+    if (!dto.resolutionSummary?.trim()) {
+      throw new BadRequestException('resolutionSummary must not be empty');
+    }
+    // Delegates to state machine: validates transition, updates status,
+    // creates StatusHistory (reason = resolutionSummary), writes AuditLog.
+    return this.stateMachine.transition(
+      ticketId,
+      TicketStatus.RESOLVED,
+      actor.id,
+      dto.resolutionSummary.trim(),
+    );
+  }
+
+  // ── 7. UPDATE METADATA ────────────────────────────────────────────────────
   async update(id: string, dto: UpdateTicketDto, actor: AuthenticatedUser) {
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
@@ -220,11 +353,14 @@ export class TicketsService {
     return updated;
   }
 
-  // ── STATUS TRANSITION ─────────────────────────────────────────────────────
+  // ── 8. TRANSITION (generic) ───────────────────────────────────────────────
   async transition(id: string, dto: TransitionStatusDto, actor: AuthenticatedUser) {
-    // RBAC: employees can only cancel their own tickets
-    if (!isAgent(actor)) {
-      const existing = await this.prisma.ticket.findUnique({ where: { id }, select: { requesterId: true } });
+    // Employees can only cancel their own tickets
+    if (!isAgentOrAbove(actor)) {
+      const existing = await this.prisma.ticket.findUnique({
+        where: { id },
+        select: { requesterId: true },
+      });
       if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
       if (existing.requesterId !== actor.id) {
         throw new ForbiddenException('You can only manage your own tickets');
@@ -234,7 +370,6 @@ export class TicketsService {
       }
     }
 
-    // Delegate state validation, DB write, status history, and audit to the state machine
     const updated = await this.stateMachine.transition(id, dto.toStatus, actor.id, dto.reason);
 
     const notifEvent = dto.toStatus === TicketStatus.ASSIGNED

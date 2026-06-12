@@ -11,25 +11,21 @@ import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
+import { AddCommentDto } from './dto/add-comment.dto';
+import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsDto } from './dto/list-tickets.dto';
+import { ResolveTicketDto } from './dto/resolve-ticket.dto';
 import { TransitionStatusDto } from './dto/transition-status.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketsService } from './tickets.service';
-
-const AGENT_ROLES = [
-  RoleName.AGENT,
-  RoleName.IT_ADMIN,
-  RoleName.L2_L3,
-  RoleName.MANAGER,
-  RoleName.SYS_ADMIN,
-] as const;
 
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
-  // Any authenticated user can raise a ticket
+  // ── POST /tickets ─────────────────────────────────────────────────────────
+  // Any authenticated user can raise a ticket (EMPLOYEE+)
   @Post()
   create(
     @Body() dto: CreateTicketDto,
@@ -38,7 +34,8 @@ export class TicketsController {
     return this.ticketsService.create(dto, user);
   }
 
-  // Employees see only their own; agents/admins see all
+  // ── GET /tickets ──────────────────────────────────────────────────────────
+  // Scoped per RBAC: EMPLOYEE=own, AGENT/L2_L3=assigned, IT_ADMIN/SYS_ADMIN=all
   @Get()
   findAll(
     @Query() query: ListTicketsDto,
@@ -47,7 +44,7 @@ export class TicketsController {
     return this.ticketsService.findAll(query, user);
   }
 
-  // RBAC enforced in service (employee can only see own)
+  // ── GET /tickets/:id ──────────────────────────────────────────────────────
   @Get(':id')
   findOne(
     @Param('id') id: string,
@@ -56,9 +53,10 @@ export class TicketsController {
     return this.ticketsService.findOne(id, user);
   }
 
-  // Metadata update — agents/admins only
+  // ── PATCH /tickets/:id ────────────────────────────────────────────────────
+  // Metadata update (subject, description, priority, category) — agents only
   @Patch(':id')
-  @Roles(...AGENT_ROLES)
+  @Roles(RoleName.AGENT, RoleName.IT_ADMIN, RoleName.L2_L3, RoleName.MANAGER, RoleName.SYS_ADMIN)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateTicketDto,
@@ -67,13 +65,61 @@ export class TicketsController {
     return this.ticketsService.update(id, dto, user);
   }
 
-  // Status transition — agents/admins; employees can only cancel own NEW ticket (enforced in service)
-  @Patch(':id/status')
+  // ── POST /tickets/:id/assign ──────────────────────────────────────────────
+  // Sets assignee and transitions to ASSIGNED atomically
+  @Post(':id/assign')
+  @Roles(RoleName.IT_ADMIN, RoleName.SYS_ADMIN)
+  assign(
+    @Param('id') id: string,
+    @Body() dto: AssignTicketDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.assign(id, dto, user);
+  }
+
+  // ── POST /tickets/:id/transition ──────────────────────────────────────────
+  // General-purpose state transition (agents); employees may only cancel own
+  @Post(':id/transition')
+  @Roles(RoleName.AGENT, RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.L2_L3)
   transition(
     @Param('id') id: string,
     @Body() dto: TransitionStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ticketsService.transition(id, dto, user);
+  }
+
+  // ── PATCH /tickets/:id/status ─────────────────────────────────────────────
+  // Legacy alias kept for backward compatibility — delegates to transition
+  @Patch(':id/status')
+  transitionLegacy(
+    @Param('id') id: string,
+    @Body() dto: TransitionStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.transition(id, dto, user);
+  }
+
+  // ── POST /tickets/:id/comments ────────────────────────────────────────────
+  // Adds a comment; isInternal notes visible only to agents
+  @Post(':id/comments')
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: AddCommentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.addComment(id, dto, user);
+  }
+
+  // ── POST /tickets/:id/resolve ─────────────────────────────────────────────
+  // Requires non-empty resolutionSummary; stored as StatusHistory.reason
+  @Post(':id/resolve')
+  @Roles(RoleName.AGENT, RoleName.IT_ADMIN)
+  resolve(
+    @Param('id') id: string,
+    @Body() dto: ResolveTicketDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.resolve(id, dto, user);
   }
 }
