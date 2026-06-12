@@ -161,6 +161,7 @@ model Ticket {
   slaResolutionDue DateTime?
   slaPausedMs      Int       @default(0)
   pausedAt         DateTime?
+  sla75WarningSent Boolean   @default(false)
 
   resolvedAt DateTime?
   closedAt   DateTime?
@@ -206,12 +207,12 @@ model StatusHistory {
   ticketId   String
   fromStatus TicketStatus?
   toStatus   TicketStatus
-  actorId    String
+  actorId    String?
   reason     String?
   createdAt  DateTime      @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  actor  User   @relation(fields: [actorId], references: [id])
+  actor  User?  @relation(fields: [actorId], references: [id])
 }
 
 model Notification {

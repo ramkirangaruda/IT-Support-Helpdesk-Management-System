@@ -6,10 +6,10 @@ function ticketLink(id: string) {
   return `${FRONTEND_URL}/tickets/${id}`;
 }
 
-function layout(title: string, body: string) {
+function layout(title: string, body: string, borderColor = '#1d4ed8') {
   return `
     <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:8px">
-      <h2 style="color:#1d4ed8">${title}</h2>
+      <h2 style="color:${borderColor}">${title}</h2>
       ${body}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
       <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk</p>
@@ -26,6 +26,10 @@ export function renderSubject(job: NotificationJob): string {
       return `[${job.ticketId}] Ticket status updated to ${job.ticketStatus}`;
     case 'ticket.comment_added':
       return `[${job.ticketId}] New comment on your ticket`;
+    case 'ticket.sla_warning':
+      return `[${job.ticketId}] ⚠ SLA Warning — ${job.slaRemainingMinutes ?? '?'} minutes remaining`;
+    case 'ticket.escalated':
+      return `[${job.ticketId}] 🚨 Ticket Escalated — SLA Breach`;
   }
 }
 
@@ -64,5 +68,20 @@ export function renderHtml(job: NotificationJob): string {
           ${job.commentBody ?? ''}
         </blockquote>
         ${btn}`);
+
+    case 'ticket.sla_warning':
+      return layout('⚠ SLA Warning', `
+        <p>Hi ${job.assigneeName ?? job.requesterName},</p>
+        <p>Ticket <strong>${job.ticketId}</strong> — <em>${job.ticketSubject}</em> — is approaching its SLA deadline.</p>
+        <p style="color:#d97706;font-weight:bold">Only ${job.slaRemainingMinutes ?? '?'} minutes of effective SLA time remaining.</p>
+        <p>Please take action to resolve this ticket before the SLA is breached.</p>
+        ${btn}`, '#d97706');
+
+    case 'ticket.escalated':
+      return layout('🚨 Ticket Escalated', `
+        <p>Hi ${job.assigneeName ?? job.requesterName},</p>
+        <p>Ticket <strong>${job.ticketId}</strong> — <em>${job.ticketSubject}</em> — has been <strong>automatically escalated</strong> due to an SLA breach.</p>
+        <p style="color:#dc2626">Immediate attention is required.</p>
+        ${btn}`, '#dc2626');
   }
 }

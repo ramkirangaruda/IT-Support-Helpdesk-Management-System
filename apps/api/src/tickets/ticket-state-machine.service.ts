@@ -75,7 +75,7 @@ export class TicketStateMachineService {
   async transition(
     ticketId: string,
     toStatus: TicketStatus,
-    actorId: string,
+    actorId: string | null,
     reason?: string,
   ) {
     const existing = await this.prisma.ticket.findUnique({

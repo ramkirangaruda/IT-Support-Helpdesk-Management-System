@@ -3,6 +3,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
@@ -11,7 +14,10 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { NOTIFICATION_QUEUE } from './notifications/notifications.processor';
 import { PrismaModule } from './prisma/prisma.module';
+import { SlaModule } from './sla/sla.module';
+import { SLA_QUEUE_NAME } from './sla/sla.constants';
 import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
@@ -26,12 +32,25 @@ import { TicketsModule } from './tickets/tickets.module';
         },
       }),
     }),
+    BullBoardModule.forRoot({
+      route: '/queues',
+      adapter: ExpressAdapter,
+    }),
+    BullBoardModule.forFeature({
+      name: NOTIFICATION_QUEUE,
+      adapter: BullMQAdapter,
+    }),
+    BullBoardModule.forFeature({
+      name: SLA_QUEUE_NAME,
+      adapter: BullMQAdapter,
+    }),
     PrismaModule,
     AuditModule,
     AuthModule,
     NotificationsModule,
     TicketsModule,
     CommentsModule,
+    SlaModule,
   ],
   controllers: [AppController],
   providers: [
