@@ -9,6 +9,7 @@ import { Prisma, RoleName, TicketStatus } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationEvent } from '../notifications/notification-job.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { TICKET_DETAIL_INCLUDE, TicketStateMachineService } from './ticket-state-machine.service';
 import { TICKET_COMMENT_ADDED, TicketCommentAddedEvent } from './ticket-events';
@@ -45,6 +46,18 @@ function visibilityScope(user: AuthenticatedUser): Scope {
 
 function isAgentOrAbove(user: AuthenticatedUser): boolean {
   return visibilityScope(user) !== 'own';
+}
+
+// Map a target TicketStatus to the right notification event
+function statusToEvent(status: TicketStatus): NotificationEvent {
+  const map: Partial<Record<TicketStatus, NotificationEvent>> = {
+    [TicketStatus.ASSIGNED]:  'ticket.assigned',
+    [TicketStatus.RESOLVED]:  'ticket.resolved',
+    [TicketStatus.CLOSED]:    'ticket.closed',
+    [TicketStatus.REOPENED]:  'ticket.reopened',
+    [TicketStatus.ESCALATED]: 'ticket.escalated',
+  };
+  return map[status] ?? 'ticket.status_changed';
 }
 
 @Injectable()
@@ -127,24 +140,14 @@ export class TicketsService {
       after:    { id: ticket.id, status: ticket.status, priority: ticket.priority },
     });
 
-    await this.notifications.enqueue({
-      event:          'ticket.created',
-      ticketId:       ticket.id,
-      ticketSubject:  ticket.subject,
-      requesterEmail: (ticket.requester as { email: string }).email,
-      requesterName:  (ticket.requester as { name: string }).name ?? 'User',
-      assigneeEmail:  ticket.assignee ? (ticket.assignee as { email: string }).email : null,
-      assigneeName:   ticket.assignee ? (ticket.assignee as { name: string }).name  : null,
-    });
+    // Notify: requester (confirmation) + IT_ADMINs (new ticket alert).
+    // No actorEmail exclusion here — the requester must always receive their own confirmation.
+    await this.notifications.emit('ticket.created', ticket.id);
 
     return ticket;
   }
 
   // ── 2. FIND ALL ───────────────────────────────────────────────────────────
-  // Visibility per RBAC matrix:
-  //   EMPLOYEE           → own raised tickets
-  //   AGENT / L2_L3      → assigned tickets
-  //   IT_ADMIN / SYS_ADMIN / MANAGER / FINANCE → all tickets
   async findAll(query: ListTicketsDto, actor: AuthenticatedUser) {
     const { status, priority, page = 1, limit = 20 } = query;
 
@@ -158,7 +161,6 @@ export class TicketsService {
     } else if (scope === 'assigned') {
       where.assigneeId = actor.id;
     }
-    // scope === 'all': honour optional filter params from query
     if (scope === 'all') {
       if (query.requesterId) where.requesterId = query.requesterId;
       if (query.assigneeId)  where.assigneeId  = query.assigneeId;
@@ -199,7 +201,6 @@ export class TicketsService {
   }
 
   // ── 4. ASSIGN ─────────────────────────────────────────────────────────────
-  // Atomically sets the assignee and transitions status to ASSIGNED.
   async assign(ticketId: string, dto: AssignTicketDto, actor: AuthenticatedUser) {
     const existing = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!existing) throw new NotFoundException(`Ticket ${ticketId} not found`);
@@ -239,21 +240,13 @@ export class TicketsService {
       after:    { status: TicketStatus.ASSIGNED, assigneeId: dto.assigneeId },
     });
 
-    await this.notifications.enqueue({
-      event:          'ticket.assigned',
-      ticketId:       updated.id,
-      ticketSubject:  updated.subject,
-      requesterEmail: (updated.requester as { email: string }).email,
-      requesterName:  (updated.requester as { name: string }).name ?? 'User',
-      assigneeEmail:  (updated.assignee as { email: string }).email,
-      assigneeName:   (updated.assignee as { name: string }).name ?? null,
-    });
+    // Notify assignee (agent assignment alert)
+    await this.notifications.emit('ticket.assigned', ticketId, { actorEmail: actor.email });
 
     return updated;
   }
 
   // ── 5. ADD COMMENT ────────────────────────────────────────────────────────
-  // Uses EventEmitter (not BullMQ) — lightweight notification path for comments.
   async addComment(ticketId: string, dto: AddCommentDto, actor: AuthenticatedUser) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
@@ -270,7 +263,6 @@ export class TicketsService {
       throw new BadRequestException(`Ticket is ${ticket.status} — comments are locked`);
     }
 
-    // Employees cannot post internal notes
     const isInternal = scope !== 'own' ? (dto.isInternal ?? false) : false;
 
     const comment = await this.prisma.comment.create({
@@ -283,6 +275,7 @@ export class TicketsService {
       include: { author: { select: { id: true, name: true, email: true } } },
     });
 
+    // Fire event for non-internal comments — TicketEventsListener calls notifications.emit
     if (!isInternal) {
       const evt = Object.assign(new TicketCommentAddedEvent(), {
         ticketId,
@@ -304,14 +297,21 @@ export class TicketsService {
     if (!dto.resolutionSummary?.trim()) {
       throw new BadRequestException('resolutionSummary must not be empty');
     }
-    // Delegates to state machine: validates transition, updates status,
-    // creates StatusHistory (reason = resolutionSummary), writes AuditLog.
-    return this.stateMachine.transition(
+
+    const updated = await this.stateMachine.transition(
       ticketId,
       TicketStatus.RESOLVED,
       actor.id,
       dto.resolutionSummary.trim(),
     );
+
+    // Notify requester: resolved confirmation + link to reopen
+    await this.notifications.emit('ticket.resolved', ticketId, {
+      actorName:  actor.email,
+      actorEmail: actor.email,
+    });
+
+    return updated;
   }
 
   // ── 7. UPDATE METADATA ────────────────────────────────────────────────────
@@ -355,7 +355,6 @@ export class TicketsService {
 
   // ── 8. TRANSITION (generic) ───────────────────────────────────────────────
   async transition(id: string, dto: TransitionStatusDto, actor: AuthenticatedUser) {
-    // Employees can only cancel their own tickets
     if (!isAgentOrAbove(actor)) {
       const existing = await this.prisma.ticket.findUnique({
         where: { id },
@@ -372,21 +371,13 @@ export class TicketsService {
 
     const updated = await this.stateMachine.transition(id, dto.toStatus, actor.id, dto.reason);
 
-    const notifEvent = dto.toStatus === TicketStatus.ASSIGNED
-      ? 'ticket.assigned'
-      : 'ticket.status_changed';
-
-    await this.notifications.enqueue({
-      event:          notifEvent,
-      ticketId:       updated.id,
-      ticketSubject:  updated.subject,
-      ticketStatus:   dto.toStatus,
-      actorName:      actor.email,
-      requesterEmail: (updated.requester as { email: string }).email,
-      requesterName:  (updated.requester as { name: string }).name ?? 'User',
-      assigneeEmail:  updated.assignee ? (updated.assignee as { email: string }).email : null,
-      assigneeName:   updated.assignee ? (updated.assignee as { name: string }).name  : null,
-    });
+    // Only send notifications for non-CANCELLED transitions
+    if (dto.toStatus !== TicketStatus.CANCELLED) {
+      await this.notifications.emit(statusToEvent(dto.toStatus), id, {
+        actorName:  actor.email,
+        actorEmail: actor.email,
+      });
+    }
 
     return updated;
   }

@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { EmailService } from './email.service';
+import { GmailAdapter } from './gmail.adapter';
 import { NotificationsProcessor, NOTIFICATION_QUEUE } from './notifications.processor';
 import { NotificationsService } from './notifications.service';
 
@@ -8,7 +8,7 @@ import { NotificationsService } from './notifications.service';
   imports: [
     BullModule.registerQueue({ name: NOTIFICATION_QUEUE }),
   ],
-  providers: [NotificationsService, NotificationsProcessor, EmailService],
+  providers: [NotificationsService, NotificationsProcessor, GmailAdapter],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

@@ -1,87 +1,233 @@
-import { NotificationJob } from './notification-job.interface';
+import { NotificationJob, RecipientRole } from './notification-job.interface';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
-function ticketLink(id: string) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function ticketUrl(id: string): string {
   return `${FRONTEND_URL}/tickets/${id}`;
 }
 
-function layout(title: string, body: string, borderColor = '#1d4ed8') {
-  return `
-    <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:8px">
-      <h2 style="color:${borderColor}">${title}</h2>
-      ${body}
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-      <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk</p>
-    </div>`;
+function greet(name: string): string {
+  return `Hi ${name},`;
 }
+
+const FOOTER = `
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
+  <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk — automated notification</p>`;
+
+function layout(accentColor: string, title: string, body: string): string {
+  return `
+<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;
+            border:1px solid #e5e7eb;border-radius:8px;border-top:4px solid ${accentColor}">
+  <h2 style="color:${accentColor};margin-top:0">${title}</h2>
+  ${body}
+  ${FOOTER}
+</div>`;
+}
+
+function btn(url: string, label = 'View Ticket'): string {
+  return `<p><a href="${url}"
+    style="display:inline-block;padding:10px 20px;background:#1d4ed8;
+           color:#fff;border-radius:6px;text-decoration:none;font-weight:600"
+  >${label}</a></p>`;
+}
+
+function ticketBadge(id: string, subject: string): string {
+  return `<blockquote style="border-left:4px solid #e5e7eb;padding:8px 16px;
+           background:#f9fafb;margin:12px 0;color:#374151">
+    <strong>${id}</strong> — ${subject}
+  </blockquote>`;
+}
+
+// Subject format: [TicketZilla] {description} - {ticketId}
+const SUBJECT_PREFIX = '[TicketZilla]';
+
+// ── Subject lines ─────────────────────────────────────────────────────────────
 
 export function renderSubject(job: NotificationJob): string {
+  const id = job.ticketId;
   switch (job.event) {
     case 'ticket.created':
-      return `[${job.ticketId}] Your ticket has been received`;
+      return job.recipientRole === 'admin'
+        ? `${SUBJECT_PREFIX} New Ticket Requires Triage - ${id}`
+        : `${SUBJECT_PREFIX} Ticket Created - ${id}`;
     case 'ticket.assigned':
-      return `[${job.ticketId}] Your ticket has been assigned`;
+      return `${SUBJECT_PREFIX} Ticket Assigned to You - ${id}`;
     case 'ticket.status_changed':
-      return `[${job.ticketId}] Ticket status updated to ${job.ticketStatus}`;
+      return `${SUBJECT_PREFIX} Status Updated: ${job.ticketStatus ?? 'changed'} - ${id}`;
     case 'ticket.comment_added':
-      return `[${job.ticketId}] New comment on your ticket`;
+      return `${SUBJECT_PREFIX} New Comment on Your Ticket - ${id}`;
     case 'ticket.sla_warning':
-      return `[${job.ticketId}] ⚠ SLA Warning — ${job.slaRemainingMinutes ?? '?'} minutes remaining`;
+      return `${SUBJECT_PREFIX} SLA Warning - ${id}`;
     case 'ticket.escalated':
-      return `[${job.ticketId}] 🚨 Ticket Escalated — SLA Breach`;
+      return `${SUBJECT_PREFIX} Ticket Escalated - ${id}`;
+    case 'ticket.resolved':
+      return `${SUBJECT_PREFIX} Ticket Resolved - ${id}`;
+    case 'ticket.closed':
+      return `${SUBJECT_PREFIX} Ticket Closed - ${id}`;
+    case 'ticket.reopened':
+      return `${SUBJECT_PREFIX} Ticket Reopened - ${id}`;
   }
 }
 
+// ── HTML bodies ───────────────────────────────────────────────────────────────
+
 export function renderHtml(job: NotificationJob): string {
-  const link = ticketLink(job.ticketId);
-  const btn  = `<a href="${link}" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#1d4ed8;color:#fff;border-radius:6px;text-decoration:none">View Ticket</a>`;
+  const url  = ticketUrl(job.ticketId);
+  const link = btn(url);
+  const badge = ticketBadge(job.ticketId, job.ticketSubject);
+
+  switch (job.event) {
+
+    // ── TICKET_CREATED ──────────────────────────────────────────────────────
+    case 'ticket.created':
+      if (job.recipientRole === 'admin') {
+        return layout('#1d4ed8', 'New Ticket Requires Triage', `
+          <p>${greet(job.recipientName)}</p>
+          <p>A new support ticket has been submitted and is waiting for assignment.</p>
+          ${badge}
+          <p><strong>Status:</strong> NEW &nbsp;|&nbsp;
+             <strong>Requester:</strong> ${job.requesterName}</p>
+          ${link}`);
+      }
+      return layout('#1d4ed8', 'Your Ticket Has Been Received', `
+        <p>${greet(job.recipientName)}</p>
+        <p>We've received your support request. Our IT team will review it shortly.</p>
+        ${badge}
+        <p>You'll receive email updates whenever the status changes.</p>
+        ${link}`);
+
+    // ── TICKET_ASSIGNED ─────────────────────────────────────────────────────
+    case 'ticket.assigned':
+      return layout('#0369a1', 'Ticket Assigned to You', `
+        <p>${greet(job.recipientName)}</p>
+        <p>A ticket has been assigned to you for resolution.</p>
+        ${badge}
+        <p><strong>Requester:</strong> ${job.requesterName}</p>
+        <p>Please review and begin working on this ticket at your earliest convenience.</p>
+        ${link}`);
+
+    // ── STATUS_UPDATED ──────────────────────────────────────────────────────
+    case 'ticket.status_changed':
+      return layout('#4f46e5', `Status Updated: ${job.ticketStatus ?? ''}`, `
+        <p>${greet(job.recipientName)}</p>
+        <p>The status of your ticket has been updated.</p>
+        ${badge}
+        <p><strong>New Status:</strong> ${job.ticketStatus ?? 'updated'}
+          ${job.actorName ? ` &nbsp;|&nbsp; <strong>Updated by:</strong> ${job.actorName}` : ''}</p>
+        ${link}`);
+
+    // ── COMMENT_ADDED ───────────────────────────────────────────────────────
+    case 'ticket.comment_added':
+      return layout('#6b7280', 'New Comment on Your Ticket', `
+        <p>${greet(job.recipientName)}</p>
+        <p>A new comment has been added to your support ticket.</p>
+        ${badge}
+        <blockquote style="border-left:4px solid #6b7280;padding:8px 16px;
+          background:#f9fafb;margin:12px 0;white-space:pre-wrap">${job.commentBody ?? ''}</blockquote>
+        ${link}`);
+
+    // ── SLA_WARNING ─────────────────────────────────────────────────────────
+    case 'ticket.sla_warning':
+      return layout('#d97706', 'SLA Deadline Approaching', `
+        <p>${greet(job.recipientName)}</p>
+        <p>The following ticket is approaching its SLA resolution deadline.</p>
+        ${badge}
+        <p style="color:#d97706;font-size:16px;font-weight:bold">
+          ⚠ ${job.slaRemainingMinutes ?? '?'} minutes of effective SLA time remaining
+        </p>
+        <p><strong>Requester:</strong> ${job.requesterName}</p>
+        <p>Please take immediate action to resolve this ticket.</p>
+        ${link}`);
+
+    // ── ESCALATED ───────────────────────────────────────────────────────────
+    case 'ticket.escalated': {
+      const roleLabel = job.recipientRole === 'manager' ? 'Manager' : 'IT Admin';
+      return layout('#dc2626', 'Ticket Escalated — SLA Breach', `
+        <p>${greet(job.recipientName)},</p>
+        <p>A ticket has been <strong>automatically escalated</strong> due to an SLA breach.
+           As ${roleLabel}, your attention is required.</p>
+        ${badge}
+        <p><strong>Requester:</strong> ${job.requesterName}
+          ${job.assigneeName ? ` &nbsp;|&nbsp; <strong>Assignee:</strong> ${job.assigneeName}` : ''}</p>
+        <p style="color:#dc2626">Immediate action required.</p>
+        ${link}`);
+    }
+
+    // ── RESOLVED ────────────────────────────────────────────────────────────
+    case 'ticket.resolved':
+      return layout('#16a34a', 'Your Ticket Has Been Resolved', `
+        <p>${greet(job.recipientName)}</p>
+        <p>Great news — your support ticket has been resolved.</p>
+        ${badge}
+        <p>If the issue is fully addressed, no further action is needed. If you still
+           experience problems, you can reopen the ticket via the link below.</p>
+        ${btn(url, 'View / Reopen Ticket')}`);
+
+    // ── CLOSED ──────────────────────────────────────────────────────────────
+    case 'ticket.closed':
+      return layout('#374151', 'Ticket Closed', `
+        <p>${greet(job.recipientName)}</p>
+        <p>Your support ticket has been officially closed.</p>
+        ${badge}
+        <p>If you encounter the same issue in the future, please raise a new ticket.</p>
+        ${link}`);
+
+    // ── REOPENED ────────────────────────────────────────────────────────────
+    case 'ticket.reopened':
+      return layout('#7c3aed', 'Ticket Reopened', `
+        <p>${greet(job.recipientName)}</p>
+        <p>A previously resolved ticket has been reopened and assigned back to you.</p>
+        ${badge}
+        <p><strong>Requester:</strong> ${job.requesterName}</p>
+        <p>Please investigate and resolve the outstanding issue.</p>
+        ${link}`);
+  }
+}
+
+// ── Plain-text fallback ───────────────────────────────────────────────────────
+
+export function renderText(job: NotificationJob): string {
+  const url = ticketUrl(job.ticketId);
+  const lines: string[] = [
+    renderSubject(job),
+    '',
+    `Ticket:  ${job.ticketId} — ${job.ticketSubject}`,
+    `Link:    ${url}`,
+  ];
 
   switch (job.event) {
     case 'ticket.created':
-      return layout('Ticket Received', `
-        <p>Hi ${job.requesterName},</p>
-        <p>We've received your support request:</p>
-        <blockquote style="border-left:4px solid #1d4ed8;padding:8px 16px;background:#eff6ff">
-          <strong>${job.ticketId}</strong> — ${job.ticketSubject}
-        </blockquote>
-        <p>Our team will review it shortly. You'll receive updates as the status changes.</p>
-        ${btn}`);
-
+      lines.push(job.recipientRole === 'admin'
+        ? `A new ticket requires triage. Requester: ${job.requesterName}`
+        : 'Your support request has been received. We will be in touch shortly.');
+      break;
     case 'ticket.assigned':
-      return layout('Ticket Assigned', `
-        <p>Hi ${job.requesterName},</p>
-        <p>Your ticket <strong>${job.ticketId}</strong> has been assigned to <strong>${job.assigneeName ?? 'an agent'}</strong> and is being worked on.</p>
-        ${btn}`);
-
+      lines.push(`This ticket has been assigned to you. Requester: ${job.requesterName}`);
+      break;
     case 'ticket.status_changed':
-      return layout(`Status Updated: ${job.ticketStatus}`, `
-        <p>Hi ${job.requesterName},</p>
-        <p>The status of your ticket <strong>${job.ticketId}</strong> has changed to <strong>${job.ticketStatus}</strong>.</p>
-        ${btn}`);
-
+      lines.push(`Ticket status updated to: ${job.ticketStatus ?? 'unknown'}`);
+      break;
     case 'ticket.comment_added':
-      return layout('New Comment on Your Ticket', `
-        <p>Hi ${job.requesterName},</p>
-        <p>A new comment was added to ticket <strong>${job.ticketId}</strong>:</p>
-        <blockquote style="border-left:4px solid #6b7280;padding:8px 16px;background:#f9fafb">
-          ${job.commentBody ?? ''}
-        </blockquote>
-        ${btn}`);
-
+      lines.push(`New comment: ${job.commentBody ?? ''}`);
+      break;
     case 'ticket.sla_warning':
-      return layout('⚠ SLA Warning', `
-        <p>Hi ${job.assigneeName ?? job.requesterName},</p>
-        <p>Ticket <strong>${job.ticketId}</strong> — <em>${job.ticketSubject}</em> — is approaching its SLA deadline.</p>
-        <p style="color:#d97706;font-weight:bold">Only ${job.slaRemainingMinutes ?? '?'} minutes of effective SLA time remaining.</p>
-        <p>Please take action to resolve this ticket before the SLA is breached.</p>
-        ${btn}`, '#d97706');
-
+      lines.push(`WARNING: Only ${job.slaRemainingMinutes ?? '?'} minutes of SLA time remaining. Take immediate action.`);
+      break;
     case 'ticket.escalated':
-      return layout('🚨 Ticket Escalated', `
-        <p>Hi ${job.assigneeName ?? job.requesterName},</p>
-        <p>Ticket <strong>${job.ticketId}</strong> — <em>${job.ticketSubject}</em> — has been <strong>automatically escalated</strong> due to an SLA breach.</p>
-        <p style="color:#dc2626">Immediate attention is required.</p>
-        ${btn}`, '#dc2626');
+      lines.push(`This ticket has been auto-escalated due to SLA breach. Immediate action required.`);
+      break;
+    case 'ticket.resolved':
+      lines.push('Your ticket has been resolved. Visit the link to reopen if the issue persists.');
+      break;
+    case 'ticket.closed':
+      lines.push('Your ticket has been closed. Open a new ticket if the issue recurs.');
+      break;
+    case 'ticket.reopened':
+      lines.push(`Ticket reopened and assigned back to you. Requester: ${job.requesterName}`);
+      break;
   }
+
+  return lines.join('\n');
 }

@@ -70,22 +70,12 @@ export class CommentsService {
       after:    { ticketId, isInternal: internal },
     });
 
-    // Only notify the requester if it's a public comment from an agent
+    // Notify requester when an agent posts a public comment on their ticket
     if (!internal && isAgent(actor) && ticket.requesterId !== actor.id) {
-      const fullTicket = await this.prisma.ticket.findUnique({
-        where: { id: ticketId },
-        include: { requester: { select: { email: true, name: true } } },
+      await this.notifications.emit('ticket.comment_added', ticketId, {
+        commentBody: dto.body,
+        actorEmail:  actor.email,
       });
-      if (fullTicket) {
-        await this.notifications.enqueue({
-          event:          'ticket.comment_added',
-          ticketId,
-          ticketSubject:  fullTicket.subject,
-          commentBody:    dto.body,
-          requesterEmail: fullTicket.requester.email,
-          requesterName:  fullTicket.requester.name ?? 'User',
-        });
-      }
     }
 
     return comment;

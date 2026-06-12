@@ -25,9 +25,6 @@ const ESCALATABLE_STATUSES: TicketStatus[] = [
   TicketStatus.REOPENED,
 ];
 
-const REQUESTER_SELECT = { select: { email: true, name: true } } as const;
-const ASSIGNEE_SELECT  = { select: { email: true, name: true } } as const;
-
 @Processor(SLA_QUEUE_NAME)
 @Injectable()
 export class SlaProcessor extends WorkerHost {
@@ -62,13 +59,9 @@ export class SlaProcessor extends WorkerHost {
 
     const tickets = await this.prisma.ticket.findMany({
       where: {
-        status:          { in: ACTIVE_STATUSES },
+        status:           { in: ACTIVE_STATUSES },
         slaResolutionDue: { not: null },
         sla75WarningSent: false,
-      },
-      include: {
-        requester: REQUESTER_SELECT,
-        assignee:  ASSIGNEE_SELECT,
       },
     });
 
@@ -101,15 +94,8 @@ export class SlaProcessor extends WorkerHost {
       );
       warned++;
 
-      await this.notifications.enqueue({
-        event:              'ticket.sla_warning',
-        ticketId:           ticket.id,
-        ticketSubject:      ticket.subject,
+      await this.notifications.emit('ticket.sla_warning', ticket.id, {
         slaRemainingMinutes: remainingMinutes,
-        requesterEmail:     ticket.requester.email,
-        requesterName:      ticket.requester.name ?? 'User',
-        assigneeEmail:      ticket.assignee?.email ?? null,
-        assigneeName:       ticket.assignee?.name ?? null,
       });
     }
 
@@ -127,10 +113,6 @@ export class SlaProcessor extends WorkerHost {
       where: {
         status:           { in: ESCALATABLE_STATUSES },
         slaResolutionDue: { lt: now },
-      },
-      include: {
-        requester: REQUESTER_SELECT,
-        assignee:  ASSIGNEE_SELECT,
       },
     });
 
@@ -162,16 +144,7 @@ export class SlaProcessor extends WorkerHost {
         escalated++;
         this.logger.warn(`Escalated ${ticket.id} — SLA breach (${Math.round(-effectiveRemaining / 60_000)}min overdue)`);
 
-        await this.notifications.enqueue({
-          event:         'ticket.escalated',
-          ticketId:      ticket.id,
-          ticketSubject: ticket.subject,
-          ticketStatus:  'ESCALATED',
-          requesterEmail: ticket.requester.email,
-          requesterName:  ticket.requester.name ?? 'User',
-          assigneeEmail:  ticket.assignee?.email ?? null,
-          assigneeName:   ticket.assignee?.name ?? null,
-        });
+        await this.notifications.emit('ticket.escalated', ticket.id);
       } catch (err) {
         if (err instanceof BadRequestException) {
           // Already escalated by a concurrent worker — harmless
