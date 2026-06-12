@@ -160,6 +160,7 @@ model Ticket {
   slaResponseDue   DateTime?
   slaResolutionDue DateTime?
   slaPausedMs      Int       @default(0)
+  pausedAt         DateTime?
 
   resolvedAt DateTime?
   closedAt   DateTime?

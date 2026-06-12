@@ -9,7 +9,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TicketStateMachineService } from './ticket-state-machine.service';
+import { TICKET_DETAIL_INCLUDE, TicketStateMachineService } from './ticket-state-machine.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TransitionStatusDto } from './dto/transition-status.dto';
@@ -36,21 +36,8 @@ const SUMMARY_INCLUDE = {
   category:  { select: { id: true, name: true } },
 } satisfies Prisma.TicketInclude;
 
-// Include shape for single-ticket detail
-const DETAIL_INCLUDE = {
-  requester: { select: { id: true, name: true, email: true } },
-  assignee:  { select: { id: true, name: true, email: true } },
-  category:  { select: { id: true, name: true } },
-  comments: {
-    orderBy: { createdAt: 'asc' as const },
-    include: { author: { select: { id: true, name: true, email: true } } },
-  },
-  attachments: { orderBy: { createdAt: 'asc' as const } },
-  statusHistory: {
-    orderBy: { createdAt: 'asc' as const },
-    include: { actor: { select: { id: true, name: true, email: true } } },
-  },
-} satisfies Prisma.TicketInclude;
+// Include shape for single-ticket detail (canonical definition is in ticket-state-machine.service)
+const DETAIL_INCLUDE = TICKET_DETAIL_INCLUDE;
 
 @Injectable()
 export class TicketsService {
@@ -235,11 +222,10 @@ export class TicketsService {
 
   // ── STATUS TRANSITION ─────────────────────────────────────────────────────
   async transition(id: string, dto: TransitionStatusDto, actor: AuthenticatedUser) {
-    const existing = await this.prisma.ticket.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
-
-    // Employees can only cancel their own NEW tickets
+    // RBAC: employees can only cancel their own tickets
     if (!isAgent(actor)) {
+      const existing = await this.prisma.ticket.findUnique({ where: { id }, select: { requesterId: true } });
+      if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
       if (existing.requesterId !== actor.id) {
         throw new ForbiddenException('You can only manage your own tickets');
       }
@@ -248,37 +234,8 @@ export class TicketsService {
       }
     }
 
-    this.stateMachine.assertTransition(existing.status, dto.toStatus);
-
-    const now = new Date();
-    const patch: Prisma.TicketUpdateInput = { status: dto.toStatus };
-    if (dto.toStatus === TicketStatus.RESOLVED) patch.resolvedAt = now;
-    if (dto.toStatus === TicketStatus.CLOSED)   patch.closedAt   = now;
-
-    const updated = await this.prisma.ticket.update({
-      where: { id },
-      data: {
-        ...patch,
-        statusHistory: {
-          create: {
-            fromStatus: existing.status,
-            toStatus:   dto.toStatus,
-            actorId:    actor.id,
-            reason:     dto.reason ?? null,
-          },
-        },
-      },
-      include: DETAIL_INCLUDE,
-    });
-
-    await this.audit.log({
-      actorId:  actor.id,
-      entity:   'Ticket',
-      entityId: id,
-      action:   `TRANSITION`,
-      before:   { status: existing.status },
-      after:    { status: dto.toStatus },
-    });
+    // Delegate state validation, DB write, status history, and audit to the state machine
+    const updated = await this.stateMachine.transition(id, dto.toStatus, actor.id, dto.reason);
 
     const notifEvent = dto.toStatus === TicketStatus.ASSIGNED
       ? 'ticket.assigned'
