@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Prisma, RoleName, TicketStatus } from '@prisma/client';
+import { Prisma, Priority, RoleName, TicketStatus } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -219,6 +219,8 @@ export class TicketsService {
       data: {
         assigneeId: dto.assigneeId,
         status:     TicketStatus.ASSIGNED,
+        ...(dto.priority   !== undefined && { priority:   dto.priority   as Priority }),
+        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
         statusHistory: {
           create: {
             fromStatus: existing.status,
@@ -358,14 +360,20 @@ export class TicketsService {
     if (!isAgentOrAbove(actor)) {
       const existing = await this.prisma.ticket.findUnique({
         where: { id },
-        select: { requesterId: true },
+        select: { requesterId: true, status: true },
       });
       if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
       if (existing.requesterId !== actor.id) {
         throw new ForbiddenException('You can only manage your own tickets');
       }
-      if (dto.toStatus !== TicketStatus.CANCELLED) {
-        throw new ForbiddenException('Employees may only cancel tickets');
+      // Employees may cancel any of their open tickets, or close a resolved one.
+      const employeeAllowed =
+        dto.toStatus === TicketStatus.CANCELLED ||
+        (dto.toStatus === TicketStatus.CLOSED && existing.status === TicketStatus.RESOLVED);
+      if (!employeeAllowed) {
+        throw new ForbiddenException(
+          'Employees may only cancel open tickets or confirm resolution of resolved tickets',
+        );
       }
     }
 
@@ -380,5 +388,38 @@ export class TicketsService {
     }
 
     return updated;
+  }
+
+  // ── 9. STATS ──────────────────────────────────────────────────────────────
+  async getStats() {
+    const now = new Date();
+    const openStatuses = [
+      TicketStatus.NEW, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS,
+      TicketStatus.ON_HOLD, TicketStatus.ESCALATED, TicketStatus.REOPENED,
+    ];
+
+    const [totalOpen, newCount, assignedCount, inProgressCount, escalatedCount, breachedCount] =
+      await Promise.all([
+        this.prisma.ticket.count({ where: { status: { in: openStatuses } } }),
+        this.prisma.ticket.count({ where: { status: TicketStatus.NEW } }),
+        this.prisma.ticket.count({ where: { status: TicketStatus.ASSIGNED } }),
+        this.prisma.ticket.count({ where: { status: TicketStatus.IN_PROGRESS } }),
+        this.prisma.ticket.count({ where: { status: TicketStatus.ESCALATED } }),
+        this.prisma.ticket.count({
+          where: {
+            slaResolutionDue: { lt: now },
+            status: { in: openStatuses },
+          },
+        }),
+      ]);
+
+    return {
+      totalOpen,
+      new: newCount,
+      assigned: assignedCount,
+      inProgress: inProgressCount,
+      escalated: escalatedCount,
+      breachedSla: breachedCount,
+    };
   }
 }

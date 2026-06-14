@@ -2,17 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import { computeSlaPercent, formatSlaRemaining, type SlaFields } from '../../lib/sla';
 
-interface TicketRow {
+interface TicketRow extends SlaFields {
   id: string;
   subject: string;
   priority: string;
   status: string;
   category: { id: string; name: string } | null;
-  slaResolutionDue: string | null;
-  slaPausedMs: number;
-  pausedAt: string | null;
-  createdAt: string;
 }
 
 interface TicketsResponse {
@@ -28,21 +25,6 @@ const PRIORITY_ORDER: Record<string, number> = {
 };
 
 const TERMINAL = new Set(['CLOSED', 'CANCELLED']);
-
-function computeSlaPercent(ticket: TicketRow): number | null {
-  if (!ticket.slaResolutionDue) return null;
-  const now = Date.now();
-  const created = new Date(ticket.createdAt).getTime();
-  const due = new Date(ticket.slaResolutionDue).getTime();
-  const totalMs = due - created;
-  if (totalMs <= 0) return null;
-  const currentPauseMs = ticket.pausedAt
-    ? now - new Date(ticket.pausedAt).getTime()
-    : 0;
-  const effectiveDue = due + (ticket.slaPausedMs ?? 0) + currentPauseMs;
-  const remainingMs = effectiveDue - now;
-  return Math.min(100, Math.max(0, (remainingMs / totalMs) * 100));
-}
 
 function SlaIndicator({ pct }: { pct: number | null }) {
   if (pct === null) {
@@ -81,15 +63,6 @@ function SlaIndicator({ pct }: { pct: number | null }) {
   );
 }
 
-function formatSlaDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const diff = d.getTime() - Date.now();
-  if (diff < 0) return 'Breached';
-  const hrs = Math.floor(diff / 3_600_000);
-  if (hrs < 24) return `${hrs}h left`;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
 
 const STATUS_STYLES: Record<string, string> = {
   NEW: 'bg-blue-50 text-blue-700 border border-blue-200',
@@ -221,7 +194,7 @@ export default function AgentQueuePage() {
                     </td>
                     <td className={`px-4 py-3 text-xs whitespace-nowrap font-medium
                                     ${isBreached ? 'text-red-600' : 'text-gray-500'}`}>
-                      {formatSlaDate(ticket.slaResolutionDue)}
+                      {formatSlaRemaining(ticket.slaResolutionDue)}
                     </td>
                   </tr>
                 );

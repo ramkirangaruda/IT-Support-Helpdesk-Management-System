@@ -44,6 +44,14 @@ export class TicketsController {
     return this.ticketsService.findAll(query, user);
   }
 
+  // ── GET /tickets/stats ───────────────────────────────────────────────────
+  // Must be declared before :id to prevent NestJS matching 'stats' as an id
+  @Get('stats')
+  @Roles(RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.MANAGER)
+  getStats() {
+    return this.ticketsService.getStats();
+  }
+
   // ── GET /tickets/:id ──────────────────────────────────────────────────────
   @Get(':id')
   findOne(
@@ -78,9 +86,9 @@ export class TicketsController {
   }
 
   // ── POST /tickets/:id/transition ──────────────────────────────────────────
-  // General-purpose state transition (agents); employees may only cancel own
+  // No @Roles here — any authenticated user may call this; service enforces
+  // per-role constraints (employees may only cancel own, or close resolved own).
   @Post(':id/transition')
-  @Roles(RoleName.AGENT, RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.L2_L3)
   transition(
     @Param('id') id: string,
     @Body() dto: TransitionStatusDto,

@@ -19,6 +19,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SlaModule } from './sla/sla.module';
 import { SLA_QUEUE_NAME } from './sla/sla.constants';
 import { CategoriesModule } from './categories/categories.module';
+import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
@@ -50,6 +51,7 @@ import { TicketsModule } from './tickets/tickets.module';
     AuthModule,
     NotificationsModule,
     CategoriesModule,
+    UsersModule,
     TicketsModule,
     CommentsModule,
     SlaModule,
