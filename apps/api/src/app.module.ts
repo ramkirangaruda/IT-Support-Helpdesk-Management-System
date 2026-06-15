@@ -22,6 +22,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { KbModule } from './kb/kb.module';
 import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { TicketsModule } from './tickets/tickets.module';
     TicketsModule,
     CommentsModule,
     SlaModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
