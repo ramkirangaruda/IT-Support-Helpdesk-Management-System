@@ -23,6 +23,7 @@ import { KbModule } from './kb/kb.module';
 import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { AiModule } from './ai/ai.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AiModule } from './ai/ai.module';
     CommentsModule,
     SlaModule,
     AiModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [
