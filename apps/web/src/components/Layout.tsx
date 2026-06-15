@@ -29,6 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isAdmin   = user?.roles.some(r => ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'].includes(r));
   const isItAdmin = user?.roles.some(r => ['IT_ADMIN', 'SYS_ADMIN'].includes(r));
   const isManager = user?.roles.some(r => ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'].includes(r));
+  const isFinance = user?.roles.some(r => r === 'FINANCE');
   const isAgent   = user?.roles.some(r => ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'].includes(r));
   const roleLabel = user?.roles.map(r => ROLE_LABELS[r] ?? r).join(', ');
 
@@ -80,7 +81,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <NavLink to="/admin/device-requests" className={navClass}>
                     Device Requests
                   </NavLink>
+                  <NavLink to="/admin/purchase-requests" className={navClass}>
+                    Procurement
+                  </NavLink>
                 </>
+              )}
+              {isFinance && (
+                <NavLink to="/finance/purchase-requests" className={navClass}>
+                  Finance Queue
+                </NavLink>
               )}
               <NavLink to="/kb" className={navClass}>
                 Knowledge Base

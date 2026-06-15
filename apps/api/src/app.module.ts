@@ -27,6 +27,7 @@ import { ChatModule } from './chat/chat.module';
 import { ReportsModule } from './reports/reports.module';
 import { DevicesModule } from './devices/devices.module';
 import { DEVICE_QUEUE_NAME } from './devices/device-reminder.constants';
+import { ProcurementModule } from './procurement/procurement.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { DEVICE_QUEUE_NAME } from './devices/device-reminder.constants';
     ChatModule,
     ReportsModule,
     DevicesModule,
+    ProcurementModule,
   ],
   controllers: [AppController],
   providers: [

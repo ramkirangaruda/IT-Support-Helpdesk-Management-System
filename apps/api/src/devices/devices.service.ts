@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeviceRequestStatus, DeviceStatus, RoleName, UserStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -44,6 +45,7 @@ export class DevicesService {
     private readonly prisma:        PrismaService,
     private readonly audit:         AuditService,
     private readonly notifications: NotificationsService,
+    private readonly eventEmitter:  EventEmitter2,
   ) {}
 
   // ── Device ID generation ─────────────────────────────────────────────────
@@ -373,6 +375,13 @@ export class DevicesService {
       for (const admin of admins) {
         await this.notifyApprovedAdmin(admin.email, admin.name, id, request.deviceType, request.requester.name);
       }
+
+      // Trigger auto-create of PurchaseRequest if no AVAILABLE stock of this type
+      this.eventEmitter.emit('device.request.approved', {
+        deviceRequestId: id,
+        deviceType:      request.deviceType,
+        actorId:         actor.id,
+      });
     }
 
     return updated;

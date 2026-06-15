@@ -18,11 +18,14 @@ import KBEditorPage from './pages/kb/KBEditorPage';
 import DeviceRequestPage from './pages/devices/DeviceRequestPage';
 import MyDeviceRequestsPage from './pages/devices/MyDeviceRequestsPage';
 import ManagerApprovalsPage from './pages/manager/ManagerApprovalsPage';
+import PurchaseRequestsPage from './pages/admin/PurchaseRequestsPage';
+import FinancePurchaseRequestsPage from './pages/finance/FinancePurchaseRequestsPage';
 
-const ADMIN_ROLES   = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const ADMIN_ROLES    = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
-const AGENT_ROLES  = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
-const MANAGER_ROLES = ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'];
+const AGENT_ROLES    = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const MANAGER_ROLES  = ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'];
+const FINANCE_ROLES  = ['FINANCE'];
 
 export default function App() {
   const { user } = useAuth();
@@ -140,6 +143,26 @@ export default function App() {
           element={
             <ProtectedRoute roles={MANAGER_ROLES}>
               <ManagerApprovalsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* IT Admin purchase requests */}
+        <Route
+          path="/admin/purchase-requests"
+          element={
+            <ProtectedRoute roles={IT_ADMIN_ROLES}>
+              <PurchaseRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Finance approval queue */}
+        <Route
+          path="/finance/purchase-requests"
+          element={
+            <ProtectedRoute roles={FINANCE_ROLES}>
+              <FinancePurchaseRequestsPage />
             </ProtectedRoute>
           }
         />

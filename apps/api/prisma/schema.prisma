@@ -114,6 +114,9 @@ model User {
   deviceRequestsManaged DeviceRequest[]    @relation("DeviceRequestManager")
   allocations           DeviceAllocation[] @relation("UserDeviceAllocations")
   deviceReminders       DeviceReminder[]   @relation("UserDeviceReminders")
+
+  purchaseRequestsRaised PurchaseRequest[] @relation("PurchaseRequestRaisedBy")
+  approvalStepsGiven     ApprovalStep[]    @relation("ApprovalStepApprover")
 }
 
 model Role {
@@ -330,9 +333,10 @@ model DeviceRequest {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  requester  User              @relation("DeviceRequestRequester", fields: [requesterId], references: [id])
-  manager    User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id])
-  allocation DeviceAllocation?
+  requester        User              @relation("DeviceRequestRequester", fields: [requesterId], references: [id])
+  manager          User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id])
+  allocation       DeviceAllocation?
+  purchaseRequests PurchaseRequest[]
 }
 
 model DeviceAllocation {
@@ -361,6 +365,76 @@ model DeviceReminder {
   employee User @relation("UserDeviceReminders", fields: [employeeId], references: [id])
 
   @@index([employeeId, sentAt])
+}
+
+// ─── Procurement ─────────────────────────────────────────────────────────────
+
+enum PurchaseRequestStatus {
+  RAISED
+  PENDING_MANAGER_APPROVAL
+  MANAGER_APPROVED
+  PENDING_FINANCE_APPROVAL
+  FINANCE_APPROVED
+  PO_RAISED
+  RECEIVED
+  REJECTED
+  ON_HOLD
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  ON_HOLD
+}
+
+model Vendor {
+  id           String   @id @default(cuid())
+  name         String
+  category     String
+  leadTimeDays Int?
+  rating       Float?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchaseRequests PurchaseRequest[]
+}
+
+model PurchaseRequest {
+  // id set by service as PR-YYYY-NNNN; no @default intentional
+  id              String                @id
+  raisedById      String
+  deviceRequestId String?
+  itemSpec        String
+  quantity        Int
+  estCost         Decimal
+  actualCost      Decimal?
+  budgetCode      String
+  vendorId        String?
+  poNumber        String?
+  receivedAt      DateTime?
+  status          PurchaseRequestStatus @default(RAISED)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  raisedBy      User           @relation("PurchaseRequestRaisedBy", fields: [raisedById], references: [id])
+  deviceRequest DeviceRequest? @relation(fields: [deviceRequestId], references: [id])
+  vendor        Vendor?        @relation(fields: [vendorId], references: [id])
+}
+
+model ApprovalStep {
+  id         String           @id @default(cuid())
+  parentType String           // "DeviceRequest" | "PurchaseRequest"
+  parentId   String
+  approverId String
+  role       String
+  decision   ApprovalDecision
+  comment    String?
+  decidedAt  DateTime         @default(now())
+
+  approver User @relation("ApprovalStepApprover", fields: [approverId], references: [id])
+
+  @@index([parentType, parentId])
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────
