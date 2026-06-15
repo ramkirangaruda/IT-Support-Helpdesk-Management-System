@@ -24,6 +24,7 @@ import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ChatModule } from './chat/chat.module';
     SlaModule,
     AiModule,
     ChatModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [

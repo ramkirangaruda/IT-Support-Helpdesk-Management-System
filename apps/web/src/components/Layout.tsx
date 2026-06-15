@@ -53,9 +53,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </NavLink>
               )}
               {isAdmin && (
-                <NavLink to="/admin/tickets" className={navClass}>
-                  Admin Queue
-                </NavLink>
+                <>
+                  <NavLink to="/admin/dashboard" className={navClass}>
+                    Dashboard
+                  </NavLink>
+                  <NavLink to="/admin/tickets" className={navClass}>
+                    Admin Queue
+                  </NavLink>
+                </>
               )}
               <NavLink to="/kb" className={navClass}>
                 Knowledge Base

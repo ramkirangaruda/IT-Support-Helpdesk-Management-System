@@ -8,6 +8,7 @@ import NewTicketPage from './pages/tickets/NewTicketPage';
 import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import AdminTicketQueuePage from './pages/admin/AdminTicketQueuePage';
 import AssignTicketPage from './pages/admin/AssignTicketPage';
+import DashboardPage from './pages/admin/DashboardPage';
 import AgentQueuePage from './pages/agent/AgentQueuePage';
 import KBListPage from './pages/kb/KBListPage';
 import KBArticlePage from './pages/kb/KBArticlePage';
@@ -42,6 +43,14 @@ export default function App() {
         />
 
         {/* IT_ADMIN / SYS_ADMIN / MANAGER only */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute roles={ADMIN_ROLES}>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/tickets"
           element={
