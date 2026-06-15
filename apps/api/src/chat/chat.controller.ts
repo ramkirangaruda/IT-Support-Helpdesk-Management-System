@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { ChatService } from './chat.service';
@@ -10,6 +11,8 @@ export class ChatController {
 
   // POST /chat/sessions — creates a new session for the authenticated user
   @Post('sessions')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   createSession(@CurrentUser() user: AuthenticatedUser) {
     return this.chatService.createSession(user);
   }

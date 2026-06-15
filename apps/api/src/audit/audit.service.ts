@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,6 +13,8 @@ export interface AuditPayload {
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async log(payload: AuditPayload): Promise<void> {
@@ -26,5 +28,12 @@ export class AuditService {
         after: (payload.after ?? Prisma.JsonNull) as Prisma.InputJsonValue,
       },
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(
+        `AUDIT ${payload.action} ${payload.entity}#${payload.entityId}` +
+        (payload.actorId ? ` by ${payload.actorId}` : ''),
+      );
+    }
   }
 }

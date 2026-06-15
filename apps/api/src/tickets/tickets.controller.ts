@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -27,6 +29,8 @@ export class TicketsController {
   // ── POST /tickets ─────────────────────────────────────────────────────────
   // Any authenticated user can raise a ticket (EMPLOYEE+)
   @Post()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   create(
     @Body() dto: CreateTicketDto,
     @CurrentUser() user: AuthenticatedUser,
