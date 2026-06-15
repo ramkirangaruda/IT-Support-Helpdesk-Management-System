@@ -8,6 +8,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { DevAdminController } from './dev-admin.controller';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -73,7 +74,7 @@ import { ProcurementModule } from './procurement/procurement.module';
     DevicesModule,
     ProcurementModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, DevAdminController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

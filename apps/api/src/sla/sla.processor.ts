@@ -106,7 +106,7 @@ export class SlaProcessor extends WorkerHost {
   // Idempotent: ESCALATED status is excluded from the query so already-escalated
   // tickets are never processed again. try/catch on stateMachine.transition handles
   // rare race conditions where two workers reach the same ticket simultaneously.
-  private async checkEscalations(): Promise<void> {
+  async checkEscalations(): Promise<void> {
     const now = new Date();
 
     const tickets = await this.prisma.ticket.findMany({

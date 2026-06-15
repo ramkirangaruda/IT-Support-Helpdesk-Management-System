@@ -28,7 +28,7 @@ export class DeviceReminderProcessor extends WorkerHost {
     await this.checkDeviceLimits();
   }
 
-  private async checkDeviceLimits(): Promise<void> {
+  async checkDeviceLimits(): Promise<void> {
     // Load config with safe fallbacks
     const [maxCfg, cadenceCfg] = await Promise.all([
       this.prisma.systemConfig.findUnique({ where: { key: 'MAX_DEVICES_PER_EMPLOYEE' } }),

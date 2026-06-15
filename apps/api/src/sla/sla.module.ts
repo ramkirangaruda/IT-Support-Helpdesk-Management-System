@@ -13,5 +13,6 @@ import { SlaScheduler } from './sla.scheduler';
     TicketsModule,
   ],
   providers: [SlaProcessor, SlaScheduler],
+  exports:   [SlaProcessor],
 })
 export class SlaModule {}

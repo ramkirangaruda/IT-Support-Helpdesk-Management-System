@@ -19,7 +19,9 @@ import DeviceRequestPage from './pages/devices/DeviceRequestPage';
 import MyDeviceRequestsPage from './pages/devices/MyDeviceRequestsPage';
 import ManagerApprovalsPage from './pages/manager/ManagerApprovalsPage';
 import PurchaseRequestsPage from './pages/admin/PurchaseRequestsPage';
+import ProcurementPipelinePage from './pages/admin/ProcurementPipelinePage';
 import FinancePurchaseRequestsPage from './pages/finance/FinancePurchaseRequestsPage';
+import FinanceApprovalsPage from './pages/finance/FinanceApprovalsPage';
 
 const ADMIN_ROLES    = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
@@ -147,7 +149,7 @@ export default function App() {
           }
         />
 
-        {/* IT Admin purchase requests */}
+        {/* IT Admin purchase requests (legacy) */}
         <Route
           path="/admin/purchase-requests"
           element={
@@ -157,12 +159,32 @@ export default function App() {
           }
         />
 
-        {/* Finance approval queue */}
+        {/* IT Admin procurement pipeline */}
+        <Route
+          path="/admin/procurement"
+          element={
+            <ProtectedRoute roles={IT_ADMIN_ROLES}>
+              <ProcurementPipelinePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Finance approval queue (legacy) */}
         <Route
           path="/finance/purchase-requests"
           element={
             <ProtectedRoute roles={FINANCE_ROLES}>
               <FinancePurchaseRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Finance approvals */}
+        <Route
+          path="/finance/approvals"
+          element={
+            <ProtectedRoute roles={FINANCE_ROLES}>
+              <FinanceApprovalsPage />
             </ProtectedRoute>
           }
         />

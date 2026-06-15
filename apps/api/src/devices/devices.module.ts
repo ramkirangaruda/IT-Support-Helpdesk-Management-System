@@ -18,5 +18,6 @@ import { DevicesService } from './devices.service';
   ],
   controllers: [DevicesController, DeviceRequestsController, EmployeeDevicesController],
   providers:   [DevicesService, DeviceReminderProcessor, DeviceReminderScheduler],
+  exports:     [DevicesService, DeviceReminderProcessor],
 })
 export class DevicesModule {}

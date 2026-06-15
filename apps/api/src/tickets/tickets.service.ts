@@ -197,6 +197,14 @@ export class TicketsService {
       throw new NotFoundException(`Ticket ${id} not found`);
     }
 
+    // Employees and other non-agent roles must not see internal notes
+    if (scope === 'own') {
+      return {
+        ...ticket,
+        comments: ticket.comments.filter(c => !c.isInternal),
+      };
+    }
+
     return ticket;
   }
 

@@ -81,13 +81,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <NavLink to="/admin/device-requests" className={navClass}>
                     Device Requests
                   </NavLink>
-                  <NavLink to="/admin/purchase-requests" className={navClass}>
+                  <NavLink to="/admin/procurement" className={navClass}>
                     Procurement
                   </NavLink>
                 </>
               )}
               {isFinance && (
-                <NavLink to="/finance/purchase-requests" className={navClass}>
+                <NavLink to="/finance/approvals" className={navClass}>
                   Finance Queue
                 </NavLink>
               )}

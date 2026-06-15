@@ -38,4 +38,27 @@ Use @Public() to opt routes out of auth. Use @Roles(...RoleName) for RBAC.
 Use @CurrentUser() to access the authenticated user in a controller.
 
 ## Current phase
-MVP — Phase 1
+COMPLETE — all 5 phases built and TypeScript-clean. E2E testing pending Docker environment.
+
+## Dev-only endpoints (NODE_ENV ≠ production)
+- POST /api/auth/dev-login — get a JWT for any test user
+- POST /api/admin/trigger-escalation-check — manually fire SLA escalation check
+- POST /api/admin/trigger-device-reminder-check — manually fire device limit check
+
+## Known deferred items
+- File attachments with MinIO/S3 (procurement documents, ticket attachments)
+- Production SSO OIDC wiring (dev uses mock dev-login)
+- Real SLA working-hours calendar (current impl uses wall-clock time)
+- Finance PDF purchase order generation
+- Full E2E test suite (Playwright / Cypress)
+- Apple Silicon / Linux arm64 Docker image for ai-service
+
+## Deployment notes
+1. Copy `.env.example` → `.env` and fill in all secrets
+2. docker-compose up -d postgres redis ai-service minio
+3. cd apps/api && npx prisma migrate deploy
+4. npm run build --workspace=apps/api && node apps/api/dist/main.js
+5. npm run build --workspace=apps/web — serve dist/ with nginx / Cloudfront
+6. Set NODE_ENV=production — disables dev-login and dev-admin endpoints
+7. Wire OIDC: set OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET in .env
+8. Set FRONTEND_URL to the public domain (used in email links)

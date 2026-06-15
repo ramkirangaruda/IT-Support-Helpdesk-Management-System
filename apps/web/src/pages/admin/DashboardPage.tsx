@@ -200,7 +200,22 @@ export default function DashboardPage() {
   const { data: overdueData } = useQuery<OverdueData>({
     queryKey: ['devices-overdue'],
     queryFn:  () => api.get<OverdueData>('/devices/overdue').then(r => r.data),
-    refetchInterval: 300_000, // every 5 min
+    refetchInterval: 300_000,
+  });
+
+  const { data: procurementPrs = [] } = useQuery<{ id: string; status: string; estCost: string }[]>({
+    queryKey: ['dashboard-prs'],
+    queryFn:  () =>
+      api.get<{ id: string; status: string; estCost: string }[]>('/purchase-requests').then(r => r.data),
+    refetchInterval: 60_000,
+  });
+
+  const { data: pendingDeviceReqs = [] } = useQuery<{ id: string }[]>({
+    queryKey: ['dashboard-pending-devices'],
+    queryFn:  () =>
+      api.get<{ id: string }[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
+        .then(r => r.data),
+    refetchInterval: 60_000,
   });
 
   // ── Derived chart data ────────────────────────────────────────────────────
@@ -228,6 +243,21 @@ export default function DashboardPage() {
     if (!data) return 0;
     return Object.values(data.openByStatus).reduce((s, n) => s + n, 0);
   }, [data]);
+
+  // Procurement summary
+  const pendingApprovals = useMemo(() => {
+    const pendingPrs = procurementPrs.filter(pr =>
+      pr.status === 'PENDING_MANAGER_APPROVAL' || pr.status === 'PENDING_FINANCE_APPROVAL',
+    ).length;
+    return pendingDeviceReqs.length + pendingPrs;
+  }, [procurementPrs, pendingDeviceReqs]);
+
+  const pipelineValue = useMemo(() => {
+    const TERMINAL = new Set(['RECEIVED', 'REJECTED']);
+    return procurementPrs
+      .filter(pr => !TERMINAL.has(pr.status))
+      .reduce((sum, pr) => sum + parseFloat(pr.estCost || '0'), 0);
+  }, [procurementPrs]);
 
   // Sorted open tickets table
   const openTickets = useMemo(() => {
@@ -303,6 +333,22 @@ export default function DashboardPage() {
             {exporting ? 'Exporting…' : '↓ Export CSV'}
           </button>
         </div>
+      </div>
+
+      {/* ── Procurement summary ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <StatCard
+          label="Pending Approvals"
+          value={pendingApprovals}
+          sub="device + purchase requests"
+          highlight={pendingApprovals > 0 ? 'yellow' : undefined}
+        />
+        <StatCard
+          label="Pipeline Value"
+          value={`£${pipelineValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          sub="active purchase requests"
+          highlight="indigo"
+        />
       </div>
 
       {isLoading && (
