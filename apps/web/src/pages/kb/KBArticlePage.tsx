@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../auth/useAuth';
@@ -18,8 +18,8 @@ interface KBArticle {
   category: { id: string; name: string } | null;
 }
 
-const EDITOR_ROLES = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
-const ADMIN_ROLES  = new Set(['IT_ADMIN', 'SYS_ADMIN']);
+const EDITOR_ROLES  = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
+const PUBLISH_ROLES = new Set(['IT_ADMIN', 'SYS_ADMIN']);
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -27,7 +27,6 @@ function formatDate(iso: string) {
   });
 }
 
-// Very simple Markdown-lite renderer: bold, code blocks, bullet lists
 function BodyRenderer({ body }: { body: string }) {
   const lines = body.split('\n');
   return (
@@ -39,7 +38,6 @@ function BodyRenderer({ body }: { body: string }) {
           return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>;
         }
         if (line.startsWith('```') || line === '') return <br key={i} />;
-        // inline **bold**
         const parts = line.split(/(\*\*[^*]+\*\*)/g);
         return (
           <p key={i} className="mb-1">
@@ -59,24 +57,34 @@ export default function KBArticlePage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [helpfulClicked, setHelpfulClicked] = useState(false);
+  const queryClient = useQueryClient();
+  const [feedbackGiven, setFeedbackGiven] = useState<'yes' | 'no' | null>(null);
 
-  const isEditor = user?.roles.some(r => EDITOR_ROLES.has(r));
-  const isAdmin  = user?.roles.some(r => ADMIN_ROLES.has(r));
+  const isEditor   = user?.roles.some(r => EDITOR_ROLES.has(r));
+  const canPublish = user?.roles.some(r => PUBLISH_ROLES.has(r));
 
   const { data: article, isLoading, isError } = useQuery<KBArticle>({
     queryKey: ['kb-article', id],
-    queryFn: () => api.get<KBArticle>(`/kb/${id}`).then(r => r.data),
+    queryFn: () => api.get<KBArticle>(`/kb/articles/${id}`).then(r => r.data),
     enabled: !!id,
   });
 
-  const helpfulMutation = useMutation({
-    mutationFn: () => api.post(`/kb/${id}/helpful`).then(r => r.data),
-    onSuccess: () => setHelpfulClicked(true),
+  const feedbackMutation = useMutation({
+    mutationFn: (helpful: boolean) =>
+      api.post(`/kb/articles/${id}/feedback`, { helpful }).then(r => r.data),
+    onSuccess: (_data, helpful) => setFeedbackGiven(helpful ? 'yes' : 'no'),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: () => api.post(`/kb/articles/${id}/publish`).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kb-article', id] });
+      queryClient.invalidateQueries({ queryKey: ['kb-articles'] });
+    },
   });
 
   const archiveMutation = useMutation({
-    mutationFn: () => api.delete(`/kb/${id}`).then(r => r.data),
+    mutationFn: () => api.delete(`/kb/articles/${id}`).then(r => r.data),
     onSuccess: () => navigate('/kb'),
   });
 
@@ -116,6 +124,7 @@ export default function KBArticlePage() {
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4">
             <h1 className="text-2xl font-bold text-gray-900 leading-snug">{article.title}</h1>
+
             {isEditor && (
               <div className="flex gap-2 shrink-0">
                 <Link
@@ -125,7 +134,19 @@ export default function KBArticlePage() {
                 >
                   Edit
                 </Link>
-                {isAdmin && (
+
+                {canPublish && article.status === 'DRAFT' && (
+                  <button
+                    onClick={() => publishMutation.mutate()}
+                    disabled={publishMutation.isPending}
+                    className="px-3 py-1.5 text-sm border border-green-300 rounded-lg text-green-700
+                               hover:bg-green-50 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {publishMutation.isPending ? 'Publishing…' : 'Publish'}
+                  </button>
+                )}
+
+                {canPublish && article.status !== 'ARCHIVED' && (
                   <button
                     onClick={() => {
                       if (confirm('Archive this article? It will no longer be visible to users.')) {
@@ -152,8 +173,9 @@ export default function KBArticlePage() {
             <span>👍 {article.helpfulCount} found helpful</span>
             {isEditor && article.status !== 'PUBLISHED' && (
               <span className={`px-2 py-0.5 rounded text-xs font-semibold
-                ${article.status === 'DRAFT'    ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                  article.status === 'ARCHIVED' ? 'bg-gray-100 text-gray-500 border border-gray-200' : ''}`}>
+                ${article.status === 'DRAFT'
+                  ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                 {article.status}
               </span>
             )}
@@ -176,22 +198,42 @@ export default function KBArticlePage() {
           <BodyRenderer body={article.body} />
         </div>
 
-        {/* Helpful feedback */}
+        {/* Helpful feedback — only for published articles, one vote per browser session */}
         {article.status === 'PUBLISHED' && (
-          <div className="bg-gray-50 rounded-xl border border-gray-200 px-6 py-4 flex items-center
-                          justify-between gap-4">
-            <p className="text-sm text-gray-600">Was this article helpful?</p>
-            <button
-              onClick={() => !helpfulClicked && helpfulMutation.mutate()}
-              disabled={helpfulClicked || helpfulMutation.isPending}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-                          transition-colors
-                          ${helpfulClicked
-                            ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
-                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-            >
-              👍 {helpfulClicked ? 'Thanks for your feedback!' : 'Yes, it helped'}
-            </button>
+          <div className="bg-gray-50 rounded-xl border border-gray-200 px-6 py-4">
+            {feedbackGiven ? (
+              <p className="text-sm text-gray-600 text-center">
+                {feedbackGiven === 'yes'
+                  ? "👍 Thanks! We're glad this helped."
+                  : '🙏 Thanks for the feedback. We\'ll work to improve this article.'}
+              </p>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-gray-600">Was this article helpful?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => feedbackMutation.mutate(true)}
+                    disabled={feedbackMutation.isPending}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium
+                               bg-white border border-gray-300 text-gray-700
+                               hover:bg-green-50 hover:border-green-300 hover:text-green-700
+                               transition-colors disabled:opacity-50"
+                  >
+                    👍 Yes
+                  </button>
+                  <button
+                    onClick={() => feedbackMutation.mutate(false)}
+                    disabled={feedbackMutation.isPending}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium
+                               bg-white border border-gray-300 text-gray-700
+                               hover:bg-red-50 hover:border-red-300 hover:text-red-700
+                               transition-colors disabled:opacity-50"
+                  >
+                    👎 No
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

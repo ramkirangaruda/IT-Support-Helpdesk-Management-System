@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -13,8 +13,7 @@ const schema = z.object({
   title:      z.string().min(3, 'Title must be at least 3 characters').max(200),
   body:       z.string().min(20, 'Body must be at least 20 characters'),
   categoryId: z.string().optional(),
-  tags:       z.string().optional(), // comma-separated, split on submit
-  status:     z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+  tags:       z.string().optional(), // comma-separated; split on submit
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -29,10 +28,9 @@ export default function KBEditorPage() {
   const navigate = useNavigate();
   const isEditing = !!id;
 
-  // Load existing article when editing
   const { data: existing, isLoading: articleLoading } = useQuery({
     queryKey: ['kb-article-edit', id],
-    queryFn: () => api.get(`/kb/${id}`).then(r => r.data),
+    queryFn: () => api.get(`/kb/articles/${id}`).then(r => r.data),
     enabled: isEditing,
   });
 
@@ -47,14 +45,9 @@ export default function KBEditorPage() {
     handleSubmit,
     reset,
     watch,
-    control,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { status: 'DRAFT' },
-  });
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  // Populate form when editing
   useEffect(() => {
     if (existing) {
       reset({
@@ -62,7 +55,6 @@ export default function KBEditorPage() {
         body:       existing.body,
         categoryId: existing.category?.id ?? '',
         tags:       existing.tags?.join(', ') ?? '',
-        status:     existing.status,
       });
     }
   }, [existing, reset]);
@@ -72,13 +64,14 @@ export default function KBEditorPage() {
       const payload = {
         title:      values.title,
         body:       values.body,
-        status:     values.status,
         categoryId: values.categoryId || undefined,
-        tags:       values.tags ? values.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        tags:       values.tags
+          ? values.tags.split(',').map(t => t.trim()).filter(Boolean)
+          : [],
       };
       return isEditing
-        ? api.patch(`/kb/${id}`, payload).then(r => r.data)
-        : api.post('/kb', payload).then(r => r.data);
+        ? api.patch(`/kb/articles/${id}`, payload).then(r => r.data)
+        : api.post('/kb/articles', payload).then(r => r.data);
     },
     onSuccess: (article) => navigate(`/kb/${article.id}`),
   });
@@ -103,9 +96,14 @@ export default function KBEditorPage() {
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">
         {isEditing ? 'Edit Article' : 'New KB Article'}
       </h1>
+      <p className="text-sm text-gray-500 mb-6">
+        {isEditing
+          ? 'Editing content only. Use the Publish button on the article page to change its status.'
+          : 'Articles are saved as a draft. An IT Admin can publish from the article page.'}
+      </p>
 
       <form
         onSubmit={handleSubmit(v => saveMutation.mutateAsync(v))}
@@ -164,8 +162,9 @@ export default function KBEditorPage() {
                   const parts = line.split(/(\*\*[^*]+\*\*)/g);
                   return (
                     <p key={i} className="mb-1">
-                      {parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
-                        ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}
+                      {parts.map((p, j) =>
+                        p.startsWith('**') && p.endsWith('**')
+                          ? <strong key={j}>{p.slice(2, -2)}</strong> : p)}
                     </p>
                   );
                 })}
@@ -180,33 +179,6 @@ export default function KBEditorPage() {
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
               Settings
             </h2>
-
-            {/* Status */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <Controller
-                name="status"
-                control={control}
-                render={({ field }) => (
-                  <div className="flex flex-col gap-2">
-                    {(['DRAFT', 'PUBLISHED'] as const).map(s => (
-                      <label key={s} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          value={s}
-                          checked={field.value === s}
-                          onChange={() => field.onChange(s)}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {s === 'DRAFT' ? 'Draft — not visible to users' : 'Published — live'}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              />
-            </div>
 
             {/* Category */}
             <div>
@@ -235,6 +207,14 @@ export default function KBEditorPage() {
               />
               <p className="mt-1 text-xs text-gray-400">Separate with commas</p>
             </div>
+
+            {/* Status hint */}
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2">
+              <p className="text-xs text-yellow-700">
+                Articles are saved as <strong>Draft</strong>.
+                An IT Admin can publish from the article page.
+              </p>
+            </div>
           </div>
 
           {/* Submit */}
@@ -247,7 +227,7 @@ export default function KBEditorPage() {
             >
               {saveMutation.isPending
                 ? 'Saving…'
-                : isEditing ? 'Save Changes' : 'Create Article'}
+                : isEditing ? 'Save Changes' : 'Save as Draft'}
             </button>
             <Link
               to={isEditing ? `/kb/${id}` : '/kb'}

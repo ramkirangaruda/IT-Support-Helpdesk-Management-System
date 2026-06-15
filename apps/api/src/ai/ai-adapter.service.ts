@@ -65,4 +65,13 @@ export class AiAdapterService {
       return false;
     }
   }
+
+  /** Fire-and-forget KB re-sync. Called after a KB article is published or updated. */
+  async syncKb(): Promise<void> {
+    try {
+      await this.http.post('/sync-kb', {}, { timeout: 5_000 });
+    } catch (err) {
+      this.logger.warn(`AI syncKb unavailable: ${(err as Error).message}`);
+    }
+  }
 }

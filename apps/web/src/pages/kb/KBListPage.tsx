@@ -43,7 +43,7 @@ export default function KBListPage() {
   const { data, isLoading } = useQuery<KBListResponse>({
     queryKey: ['kb-articles', search, page],
     queryFn: () =>
-      api.get<KBListResponse>('/kb', {
+      api.get<KBListResponse>('/kb/articles', {
         params: { q: search || undefined, page, limit },
       }).then(r => r.data),
   });

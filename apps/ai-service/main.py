@@ -239,6 +239,14 @@ def _count_user_turns(history: list[ChatMessage]) -> int:
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
+@app.post("/sync-kb")
+async def trigger_sync_kb() -> dict:
+    """Manually trigger KB re-sync. Called by NestJS API on article publish/update."""
+    import asyncio
+    asyncio.create_task(sync_kb())  # fire-and-forget; returns immediately
+    return {"status": "sync_started"}
+
+
 @app.get("/health")
 def health() -> dict:
     kb_count = kb_collection.count()

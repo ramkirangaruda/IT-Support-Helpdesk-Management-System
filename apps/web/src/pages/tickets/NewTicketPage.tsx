@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,11 +12,22 @@ interface Category {
   name: string;
 }
 
+interface KBSuggestion {
+  id: string;
+  title: string;
+  category: { id: string; name: string } | null;
+}
+
+interface KBListResponse {
+  data: KBSuggestion[];
+  total: number;
+}
+
 const schema = z.object({
-  subject: z.string().min(5, 'Subject must be at least 5 characters').max(150),
+  subject:     z.string().min(5, 'Subject must be at least 5 characters').max(150),
   description: z.string().min(10, 'Description must be at least 10 characters').max(5000),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
-  categoryId: z.string().min(1, 'Please select a category'),
+  priority:    z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  categoryId:  z.string().min(1, 'Please select a category'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -30,6 +41,7 @@ export default function NewTicketPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileNames, setFileNames] = useState<string[]>([]);
+  const [kbQuery, setKbQuery] = useState('');
 
   const { data: categories = [], isLoading: catsLoading } = useQuery<Category[]>({
     queryKey: ['categories'],
@@ -40,11 +52,36 @@ export default function NewTicketPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { priority: 'MEDIUM' },
   });
+
+  // Debounce description → KB search query (first 50 chars)
+  const descriptionValue = watch('description');
+  useEffect(() => {
+    if (!descriptionValue || descriptionValue.length < 20) {
+      setKbQuery('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setKbQuery(descriptionValue.slice(0, 50).trim());
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [descriptionValue]);
+
+  const { data: kbResults } = useQuery<KBListResponse>({
+    queryKey: ['kb-suggestions', kbQuery],
+    queryFn: () =>
+      api.get<KBListResponse>('/kb/articles', { params: { q: kbQuery, limit: 3 } })
+        .then(r => r.data),
+    enabled: kbQuery.length >= 10,
+    staleTime: 60_000,
+  });
+
+  const suggestions = kbResults?.data?.slice(0, 3) ?? [];
 
   const createMutation = useMutation({
     // source is always FORM for portal submissions; file storage is Phase 4
@@ -98,6 +135,38 @@ export default function NewTicketPage() {
             />
             <FieldError message={errors.description?.message} />
           </div>
+
+          {/* KB suggestions — shown when description yields relevant articles (FR-2.6) */}
+          {suggestions.length > 0 && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <p className="text-sm font-semibold text-blue-800 mb-2">
+                Before submitting — did you check these articles?
+              </p>
+              <ul className="space-y-1.5 mb-3">
+                {suggestions.map(article => (
+                  <li key={article.id} className="flex items-start gap-2">
+                    <span className="text-blue-400 mt-0.5 shrink-0">📄</span>
+                    <Link
+                      to={`/kb/${article.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-700 hover:text-blue-900 hover:underline leading-snug"
+                    >
+                      {article.title}
+                      {article.category && (
+                        <span className="text-blue-400 font-normal ml-1.5">
+                          — {article.category.name}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-blue-600">
+                You can still submit your ticket if these articles don't solve your problem.
+              </p>
+            </div>
+          )}
 
           {/* Category + Priority row */}
           <div className="grid grid-cols-2 gap-4">
