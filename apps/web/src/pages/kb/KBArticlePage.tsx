@@ -1,0 +1,200 @@
+import { useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import api from '../../api/api';
+import Layout from '../../components/Layout';
+import { useAuth } from '../../auth/useAuth';
+
+interface KBArticle {
+  id: string;
+  title: string;
+  body: string;
+  status: string;
+  tags: string[];
+  views: number;
+  helpfulCount: number;
+  createdAt: string;
+  updatedAt: string;
+  category: { id: string; name: string } | null;
+}
+
+const EDITOR_ROLES = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
+const ADMIN_ROLES  = new Set(['IT_ADMIN', 'SYS_ADMIN']);
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+// Very simple Markdown-lite renderer: bold, code blocks, bullet lists
+function BodyRenderer({ body }: { body: string }) {
+  const lines = body.split('\n');
+  return (
+    <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
+      {lines.map((line, i) => {
+        if (line.startsWith('# '))  return <h2 key={i} className="text-lg font-bold text-gray-900 mt-4 mb-2">{line.slice(2)}</h2>;
+        if (line.startsWith('## ')) return <h3 key={i} className="text-base font-semibold text-gray-800 mt-3 mb-1">{line.slice(3)}</h3>;
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+          return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>;
+        }
+        if (line.startsWith('```') || line === '') return <br key={i} />;
+        // inline **bold**
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <p key={i} className="mb-1">
+            {parts.map((part, j) =>
+              part.startsWith('**') && part.endsWith('**')
+                ? <strong key={j}>{part.slice(2, -2)}</strong>
+                : part
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function KBArticlePage() {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [helpfulClicked, setHelpfulClicked] = useState(false);
+
+  const isEditor = user?.roles.some(r => EDITOR_ROLES.has(r));
+  const isAdmin  = user?.roles.some(r => ADMIN_ROLES.has(r));
+
+  const { data: article, isLoading, isError } = useQuery<KBArticle>({
+    queryKey: ['kb-article', id],
+    queryFn: () => api.get<KBArticle>(`/kb/${id}`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const helpfulMutation = useMutation({
+    mutationFn: () => api.post(`/kb/${id}/helpful`).then(r => r.data),
+    onSuccess: () => setHelpfulClicked(true),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: () => api.delete(`/kb/${id}`).then(r => r.data),
+    onSuccess: () => navigate('/kb'),
+  });
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-32 text-gray-400 text-sm">
+          Loading article…
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isError || !article) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-32 text-gray-400">
+          <p className="text-sm text-red-500">Article not found.</p>
+          <Link to="/kb" className="mt-3 text-sm text-indigo-600 hover:underline">
+            ← Back to Knowledge Base
+          </Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="mb-4">
+        <Link to="/kb" className="text-sm text-indigo-600 hover:underline">
+          ← Knowledge Base
+        </Link>
+      </div>
+
+      <div className="max-w-3xl">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-2xl font-bold text-gray-900 leading-snug">{article.title}</h1>
+            {isEditor && (
+              <div className="flex gap-2 shrink-0">
+                <Link
+                  to={`/kb/${article.id}/edit`}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700
+                             hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Edit
+                </Link>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Archive this article? It will no longer be visible to users.')) {
+                        archiveMutation.mutate();
+                      }
+                    }}
+                    disabled={archiveMutation.isPending}
+                    className="px-3 py-1.5 text-sm border border-red-200 rounded-lg text-red-600
+                               hover:bg-red-50 transition-colors font-medium disabled:opacity-50"
+                  >
+                    Archive
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-gray-400">
+            {article.category && (
+              <span className="text-gray-600 font-medium">{article.category.name}</span>
+            )}
+            <span>Updated {formatDate(article.updatedAt)}</span>
+            <span>👁 {article.views} views</span>
+            <span>👍 {article.helpfulCount} found helpful</span>
+            {isEditor && article.status !== 'PUBLISHED' && (
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold
+                ${article.status === 'DRAFT'    ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                  article.status === 'ARCHIVED' ? 'bg-gray-100 text-gray-500 border border-gray-200' : ''}`}>
+                {article.status}
+              </span>
+            )}
+          </div>
+
+          {article.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {article.tags.map(tag => (
+                <span key={tag} className="bg-indigo-50 text-indigo-600 border border-indigo-100
+                                           rounded px-2 py-0.5 text-xs font-medium">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <BodyRenderer body={article.body} />
+        </div>
+
+        {/* Helpful feedback */}
+        {article.status === 'PUBLISHED' && (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 px-6 py-4 flex items-center
+                          justify-between gap-4">
+            <p className="text-sm text-gray-600">Was this article helpful?</p>
+            <button
+              onClick={() => !helpfulClicked && helpfulMutation.mutate()}
+              disabled={helpfulClicked || helpfulMutation.isPending}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+                          transition-colors
+                          ${helpfulClicked
+                            ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
+                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+            >
+              👍 {helpfulClicked ? 'Thanks for your feedback!' : 'Yes, it helped'}
+            </button>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}

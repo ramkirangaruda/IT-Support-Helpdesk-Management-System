@@ -26,8 +26,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     navigate('/login', { replace: true });
   }
 
-  const isAdmin  = user?.roles.some(r => ['IT_ADMIN', 'SYS_ADMIN'].includes(r));
-  const isAgent  = user?.roles.some(r => ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'].includes(r));
+  const isAdmin  = user?.roles.some(r => ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'].includes(r));
+  const isAgent  = user?.roles.some(r => ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'].includes(r));
   const roleLabel = user?.roles.map(r => ROLE_LABELS[r] ?? r).join(', ');
 
   return (
@@ -57,6 +57,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   Admin Queue
                 </NavLink>
               )}
+              <NavLink to="/kb" className={navClass}>
+                Knowledge Base
+              </NavLink>
             </div>
 
             {/* User info + logout */}

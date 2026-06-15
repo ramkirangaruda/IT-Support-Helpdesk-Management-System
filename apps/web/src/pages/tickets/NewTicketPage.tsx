@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,6 +29,7 @@ function FieldError({ message }: { message?: string }) {
 export default function NewTicketPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileNames, setFileNames] = useState<string[]>([]);
 
   const { data: categories = [], isLoading: catsLoading } = useQuery<Category[]>({
     queryKey: ['categories'],
@@ -46,18 +47,9 @@ export default function NewTicketPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (values: FormValues) => {
-      const files = fileInputRef.current?.files;
-      if (files && files.length > 0) {
-        const formData = new FormData();
-        Object.entries(values).forEach(([k, v]) => formData.append(k, v));
-        Array.from(files).forEach(f => formData.append('files', f));
-        return api.post<{ id: string }>('/tickets', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        }).then(r => r.data);
-      }
-      return api.post<{ id: string }>('/tickets', values).then(r => r.data);
-    },
+    // source is always FORM for portal submissions; file storage is Phase 4
+    mutationFn: (values: FormValues) =>
+      api.post<{ id: string }>('/tickets', { ...values, source: 'FORM' }).then(r => r.data),
     onSuccess: (ticket) => navigate(`/tickets/${ticket.id}`),
   });
 
@@ -148,7 +140,7 @@ export default function NewTicketPage() {
             </div>
           </div>
 
-          {/* Attachments */}
+          {/* Attachments — stored in Phase 4 (MinIO/S3); collected here for future use */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Attachments <span className="text-gray-400 font-normal">(optional)</span>
@@ -158,11 +150,17 @@ export default function NewTicketPage() {
               type="file"
               multiple
               accept="image/*,.pdf,.doc,.docx,.txt,.log"
+              onChange={e => setFileNames(Array.from(e.target.files ?? []).map(f => f.name))}
               className="block w-full text-sm text-gray-500
                          file:mr-4 file:py-1.5 file:px-3 file:rounded file:border-0
                          file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700
                          hover:file:bg-indigo-100 cursor-pointer"
             />
+            {fileNames.length > 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                {fileNames.length} file{fileNames.length > 1 ? 's' : ''} selected — attachment upload available in a future release.
+              </p>
+            )}
             <p className="mt-1 text-xs text-gray-400">
               Max 10 MB per file. Images, PDF, Word, text accepted.
             </p>

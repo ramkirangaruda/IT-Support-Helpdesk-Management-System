@@ -7,9 +7,12 @@ import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import AdminTicketQueuePage from './pages/admin/AdminTicketQueuePage';
 import AssignTicketPage from './pages/admin/AssignTicketPage';
 import AgentQueuePage from './pages/agent/AgentQueuePage';
+import KBListPage from './pages/kb/KBListPage';
+import KBArticlePage from './pages/kb/KBArticlePage';
+import KBEditorPage from './pages/kb/KBEditorPage';
 
-const ADMIN_ROLES  = ['IT_ADMIN', 'SYS_ADMIN'];
-const AGENT_ROLES  = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'];
+const ADMIN_ROLES  = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const AGENT_ROLES  = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
 
 export default function App() {
   return (
@@ -55,6 +58,27 @@ export default function App() {
         element={
           <ProtectedRoute roles={AGENT_ROLES}>
             <AgentQueuePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Knowledge Base — any authenticated user can read; editors can create/edit */}
+      <Route path="/kb" element={<ProtectedRoute><KBListPage /></ProtectedRoute>} />
+      {/* /kb/new must come before /kb/:id */}
+      <Route
+        path="/kb/new"
+        element={
+          <ProtectedRoute roles={[...AGENT_ROLES]}>
+            <KBEditorPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/kb/:id" element={<ProtectedRoute><KBArticlePage /></ProtectedRoute>} />
+      <Route
+        path="/kb/:id/edit"
+        element={
+          <ProtectedRoute roles={[...AGENT_ROLES]}>
+            <KBEditorPage />
           </ProtectedRoute>
         }
       />
