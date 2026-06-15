@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { NotificationChannel, NotificationStatus, RoleName, UserStatus } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { GmailAdapter } from './gmail.adapter';
 import { NOTIFICATION_QUEUE } from './notifications.processor';
 import { NotificationEvent, NotificationJob, RecipientRole } from './notification-job.interface';
 
@@ -35,6 +36,7 @@ export class NotificationsService {
   constructor(
     @InjectQueue(NOTIFICATION_QUEUE) private readonly queue: Queue,
     private readonly prisma: PrismaService,
+    private readonly gmail: GmailAdapter,
   ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -169,6 +171,52 @@ export class NotificationsService {
       select: { email: true, name: true },
     });
     return users.map(u => ({ email: u.email, name: u.name, role: recipientRole }));
+  }
+
+  // ── Ad-hoc email (non-ticket, e.g. device decisions) ─────────────────────
+
+  async sendAdHoc(
+    to:       string,
+    toName:   string,
+    event:    string,
+    subject:  string,
+    html:     string,
+    text:     string,
+  ): Promise<void> {
+    let notificationId: string | null = null;
+    try {
+      const record = await this.prisma.notification.create({
+        data: {
+          ticketId:       null,
+          recipientEmail: to,
+          channel:        NotificationChannel.EMAIL,
+          event,
+          status:         NotificationStatus.PENDING,
+        },
+        select: { id: true },
+      });
+      notificationId = record.id;
+    } catch (err) {
+      this.logger.error(`sendAdHoc: failed to persist notification → ${to}: ${(err as Error).message}`);
+    }
+
+    try {
+      await this.gmail.send(to, subject, html, text);
+      if (notificationId) {
+        await this.prisma.notification.update({
+          where: { id: notificationId },
+          data:  { status: NotificationStatus.SENT, sentAt: new Date() },
+        });
+      }
+    } catch (err) {
+      this.logger.error(`sendAdHoc: email failed → ${to} | ${event}: ${(err as Error).message}`);
+      if (notificationId) {
+        await this.prisma.notification.update({
+          where: { id: notificationId },
+          data:  { status: NotificationStatus.FAILED },
+        }).catch(() => undefined);
+      }
+    }
   }
 
   // ── Persistence + enqueue ─────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
 import { ReportsModule } from './reports/reports.module';
+import { DevicesModule } from './devices/devices.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { ReportsModule } from './reports/reports.module';
     AiModule,
     ChatModule,
     ReportsModule,
+    DevicesModule,
   ],
   controllers: [AppController],
   providers: [

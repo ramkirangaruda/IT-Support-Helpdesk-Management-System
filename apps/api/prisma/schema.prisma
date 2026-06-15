@@ -71,6 +71,25 @@ enum KBArticleStatus {
   ARCHIVED
 }
 
+enum DeviceStatus {
+  AVAILABLE
+  ALLOCATED
+  IN_REPAIR
+  RETIRED
+}
+
+enum DeviceRequestStatus {
+  SUBMITTED
+  PENDING_MANAGER_APPROVAL
+  APPROVED
+  REJECTED
+  PENDING_FULFILMENT
+  ALLOCATED
+  RETURN_REQUESTED
+  RETURNED
+  CANCELLED
+}
+
 // ─── Identity & Access ───────────────────────────────────────────────────────
 
 model User {
@@ -90,6 +109,10 @@ model User {
   userRoles       UserRole[]
   statusHistory   StatusHistory[]
   chatSessions    ChatSession[]
+
+  deviceRequestsRaised  DeviceRequest[]    @relation("DeviceRequestRequester")
+  deviceRequestsManaged DeviceRequest[]    @relation("DeviceRequestManager")
+  allocations           DeviceAllocation[] @relation("UserDeviceAllocations")
 }
 
 model Role {
@@ -268,6 +291,55 @@ model KBArticle {
   updatedAt    DateTime        @updatedAt
 
   category Category? @relation(fields: [categoryId], references: [id])
+}
+
+// ─── Device Management ───────────────────────────────────────────────────────
+
+model Device {
+  id           String       @id
+  type         String
+  makeModel    String
+  serialNumber String       @unique
+  status       DeviceStatus @default(AVAILABLE)
+  condition    String?
+  purchasedOn  DateTime?
+  cost         Decimal?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  allocations DeviceAllocation[]
+}
+
+model DeviceRequest {
+  id            String              @id @default(cuid())
+  requesterId   String
+  managerId     String?
+  deviceType    String
+  justification String
+  status        DeviceRequestStatus @default(SUBMITTED)
+  decidedAt     DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  requester  User              @relation("DeviceRequestRequester", fields: [requesterId], references: [id])
+  manager    User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id])
+  allocation DeviceAllocation?
+}
+
+model DeviceAllocation {
+  id                String    @id @default(cuid())
+  deviceId          String
+  employeeId        String
+  requestId         String?   @unique
+  allocatedOn       DateTime
+  expectedReturn    DateTime?
+  returnedOn        DateTime?
+  conditionAtIssue  String
+  conditionAtReturn String?
+
+  device   Device         @relation(fields: [deviceId],   references: [id])
+  employee User           @relation("UserDeviceAllocations", fields: [employeeId], references: [id])
+  request  DeviceRequest? @relation(fields: [requestId],  references: [id])
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────
