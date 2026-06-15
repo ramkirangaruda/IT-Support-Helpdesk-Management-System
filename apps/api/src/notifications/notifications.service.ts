@@ -182,6 +182,7 @@ export class NotificationsService {
     subject:  string,
     html:     string,
     text:     string,
+    cc?:      string[],
   ): Promise<void> {
     let notificationId: string | null = null;
     try {
@@ -201,7 +202,7 @@ export class NotificationsService {
     }
 
     try {
-      await this.gmail.send(to, subject, html, text);
+      await this.gmail.send(to, subject, html, text, cc);
       if (notificationId) {
         await this.prisma.notification.update({
           where: { id: notificationId },

@@ -11,6 +11,20 @@ import { computeSlaPercent, formatSlaRemaining, slaColor, type SlaFields } from 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface OverdueEmployee {
+  id:                string;
+  name:              string;
+  email:             string;
+  holdCount:         number;
+  lastReminderAt:    string | null;
+  lastReminderCycle: number | null;
+}
+
+interface OverdueData {
+  maxDevices: number;
+  employees:  OverdueEmployee[];
+}
+
 interface DashboardData {
   openByStatus:      Record<string, number>;
   openByPriority:    Record<string, number>;
@@ -181,6 +195,12 @@ export default function DashboardPage() {
       api.get<TicketsResponse>('/reports/tickets', { params: { open: 'true', limit: 200 } })
         .then(r => r.data),
     refetchInterval: 60_000,
+  });
+
+  const { data: overdueData } = useQuery<OverdueData>({
+    queryKey: ['devices-overdue'],
+    queryFn:  () => api.get<OverdueData>('/devices/overdue').then(r => r.data),
+    refetchInterval: 300_000, // every 5 min
   });
 
   // ── Derived chart data ────────────────────────────────────────────────────
@@ -404,7 +424,90 @@ export default function DashboardPage() {
             </Section>
           </div>
 
-          {/* ── 3. Open tickets table ─────────────────────────────────────── */}
+          {/* ── 3. Overdue device returns card ───────────────────────────── */}
+          {overdueData && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                    Overdue Device Returns
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Employees holding more than {overdueData.maxDevices} device(s)
+                    · {overdueData.employees.length} employee{overdueData.employees.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+
+              {overdueData.employees.length === 0 ? (
+                <div className="py-10 flex flex-col items-center text-gray-400 gap-1">
+                  <svg className="w-8 h-8 text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium text-green-600">All employees within device limits</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {['Employee', 'Email', 'Devices Held', 'Last Reminder', 'Cycle'].map(h => (
+                          <th key={h}
+                            className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {overdueData.employees.map(emp => (
+                        <tr key={emp.id} className="hover:bg-orange-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                            {emp.name}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{emp.email}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                              text-xs font-semibold
+                              ${emp.holdCount > overdueData.maxDevices + 1
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-orange-100 text-orange-700'}`}>
+                              {emp.holdCount} / {overdueData.maxDevices}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                            {emp.lastReminderAt
+                              ? new Date(emp.lastReminderAt).toLocaleDateString('en-GB', {
+                                  day: '2-digit', month: 'short', year: 'numeric',
+                                })
+                              : <span className="text-gray-400 italic">Never</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {emp.lastReminderCycle ? (
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
+                                ${emp.lastReminderCycle === 1 ? 'bg-blue-100 text-blue-700'
+                                : emp.lastReminderCycle === 2 ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'}`}>
+                                {emp.lastReminderCycle === 1 ? 'Nudge'
+                                : emp.lastReminderCycle === 2 ? 'Firm'
+                                : `Escalated (#${emp.lastReminderCycle})`}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">None sent</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── 4. Open tickets table ─────────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>

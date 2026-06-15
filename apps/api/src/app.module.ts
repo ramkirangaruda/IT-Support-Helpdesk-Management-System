@@ -26,6 +26,7 @@ import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
 import { ReportsModule } from './reports/reports.module';
 import { DevicesModule } from './devices/devices.module';
+import { DEVICE_QUEUE_NAME } from './devices/device-reminder.constants';
 
 @Module({
   imports: [
@@ -49,6 +50,10 @@ import { DevicesModule } from './devices/devices.module';
     }),
     BullBoardModule.forFeature({
       name: SLA_QUEUE_NAME,
+      adapter: BullMQAdapter,
+    }),
+    BullBoardModule.forFeature({
+      name: DEVICE_QUEUE_NAME,
       adapter: BullMQAdapter,
     }),
     PrismaModule,

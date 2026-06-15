@@ -186,6 +186,21 @@ export class DevicesService {
       after:    { deviceStatus: DeviceStatus.AVAILABLE, returnedOn: new Date().toISOString() },
     });
 
+    // Resolve outstanding reminders if employee is now within limit
+    const [maxCfg, remaining] = await Promise.all([
+      this.prisma.systemConfig.findUnique({ where: { key: 'MAX_DEVICES_PER_EMPLOYEE' } }),
+      this.prisma.deviceAllocation.count({
+        where: { employeeId: allocation.employeeId, returnedOn: null },
+      }),
+    ]);
+    const maxDevices = maxCfg ? parseInt(maxCfg.value, 10) : 2;
+    if (remaining <= maxDevices) {
+      await this.prisma.deviceReminder.updateMany({
+        where: { employeeId: allocation.employeeId, resolved: false },
+        data:  { resolved: true },
+      });
+    }
+
     return updated;
   }
 
@@ -202,6 +217,55 @@ export class DevicesService {
       },
       orderBy: { allocatedOn: 'desc' },
     });
+  }
+
+  // ── Overdue employees (dashboard) ────────────────────────────────────────
+
+  async getOverdueEmployees() {
+    const maxCfg = await this.prisma.systemConfig.findUnique({
+      where: { key: 'MAX_DEVICES_PER_EMPLOYEE' },
+    });
+    const maxDevices = maxCfg ? parseInt(maxCfg.value, 10) : 2;
+
+    // Employees holding more than the limit
+    const raw = await this.prisma.$queryRaw<{
+      id: string; name: string; email: string; holdCount: bigint;
+    }[]>`
+      SELECT u.id, u.name, u.email, COUNT(da.id) AS "holdCount"
+      FROM "User"      u
+      JOIN "UserRole"  ur ON u.id = ur."userId"
+      JOIN "Role"      r  ON ur."roleId" = r.id AND r.name = 'EMPLOYEE'
+      JOIN "DeviceAllocation" da ON da."employeeId" = u.id AND da."returnedOn" IS NULL
+      WHERE u.status = 'ACTIVE'
+      GROUP BY u.id, u.name, u.email
+      HAVING COUNT(da.id) > ${maxDevices}
+      ORDER BY COUNT(da.id) DESC
+    `;
+
+    if (raw.length === 0) return { maxDevices, employees: [] };
+
+    // Load last reminder for each employee
+    const employeeIds = raw.map(r => r.id);
+    const lastReminders = await this.prisma.deviceReminder.findMany({
+      where: { employeeId: { in: employeeIds } },
+      orderBy: { sentAt: 'desc' },
+      distinct: ['employeeId'],
+    });
+    const reminderByEmployee = Object.fromEntries(
+      lastReminders.map(r => [r.employeeId, r]),
+    );
+
+    return {
+      maxDevices,
+      employees: raw.map(r => ({
+        id:                r.id,
+        name:              r.name,
+        email:             r.email,
+        holdCount:         Number(r.holdCount),
+        lastReminderAt:    reminderByEmployee[r.id]?.sentAt?.toISOString() ?? null,
+        lastReminderCycle: reminderByEmployee[r.id]?.cycle ?? null,
+      })),
+    };
   }
 
   // ── Device requests ───────────────────────────────────────────────────────

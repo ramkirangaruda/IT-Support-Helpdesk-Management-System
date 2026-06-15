@@ -170,6 +170,21 @@ async function seedUsers(roleMap: Record<RoleName, string>): Promise<void> {
   console.log(`  ✓ ${USERS.length} users`);
 }
 
+async function seedSystemConfig(): Promise<void> {
+  const configs = [
+    { key: 'MAX_DEVICES_PER_EMPLOYEE', value: '2' },
+    { key: 'REMINDER_CADENCE_DAYS',    value: '3' },
+  ];
+  for (const cfg of configs) {
+    await prisma.systemConfig.upsert({
+      where:  { key: cfg.key },
+      update: {},
+      create: cfg,
+    });
+  }
+  console.log(`  ✓ ${configs.length} system config entries`);
+}
+
 async function main() {
   console.log('🌱 Seeding database…\n');
 
@@ -177,6 +192,7 @@ async function main() {
   await seedCalendar();
   await seedSLAPolicies();
   await seedCategories();
+  await seedSystemConfig();
 
   console.log('  Users:');
   await seedUsers(roleMap);

@@ -14,6 +14,13 @@ const ADMIN_ROLES = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
+  // GET /devices/overdue — employees over device limit (IT_ADMIN, MANAGER)
+  @Get('overdue')
+  @Roles(RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.MANAGER)
+  getOverdue() {
+    return this.devicesService.getOverdueEmployees();
+  }
+
   // GET /devices — device register (IT_ADMIN, SYS_ADMIN)
   @Get()
   @Roles(...ADMIN_ROLES)

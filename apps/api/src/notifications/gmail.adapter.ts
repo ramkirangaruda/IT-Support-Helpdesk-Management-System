@@ -50,10 +50,16 @@ export class GmailAdapter {
    * Sends one email. Throws on failure so BullMQ can handle retries.
    * In dev mode (no GMAIL_CLIENT_ID) logs to console and returns successfully.
    */
-  async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+  async send(
+    to:      string,
+    subject: string,
+    html:    string,
+    text?:   string,
+    cc?:     string[],
+  ): Promise<void> {
     if (this.devMode) {
       this.logger.log(
-        `[DEV EMAIL]\nTo:      ${to}\nSubject: ${subject}\n\n${text ?? '(html only, no plain-text body)'}`,
+        `[DEV EMAIL]\nTo:      ${to}${cc?.length ? `\nCC:      ${cc.join(', ')}` : ''}\nSubject: ${subject}\n\n${text ?? '(html only, no plain-text body)'}`,
       );
       return;
     }
@@ -62,10 +68,11 @@ export class GmailAdapter {
     await transport.sendMail({
       from: this.fromAddress,
       to,
+      ...(cc?.length ? { cc: cc.join(',') } : {}),
       subject,
       html,
       text,
     });
-    this.logger.log(`Email sent → ${to} | ${subject}`);
+    this.logger.log(`Email sent → ${to}${cc?.length ? ` (CC: ${cc.join(', ')})` : ''} | ${subject}`);
   }
 }
