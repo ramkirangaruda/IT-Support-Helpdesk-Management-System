@@ -9,13 +9,20 @@ import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import AdminTicketQueuePage from './pages/admin/AdminTicketQueuePage';
 import AssignTicketPage from './pages/admin/AssignTicketPage';
 import DashboardPage from './pages/admin/DashboardPage';
+import DeviceRegisterPage from './pages/admin/DeviceRegisterPage';
+import DeviceRequestQueuePage from './pages/admin/DeviceRequestQueuePage';
 import AgentQueuePage from './pages/agent/AgentQueuePage';
 import KBListPage from './pages/kb/KBListPage';
 import KBArticlePage from './pages/kb/KBArticlePage';
 import KBEditorPage from './pages/kb/KBEditorPage';
+import DeviceRequestPage from './pages/devices/DeviceRequestPage';
+import MyDeviceRequestsPage from './pages/devices/MyDeviceRequestsPage';
+import ManagerApprovalsPage from './pages/manager/ManagerApprovalsPage';
 
-const ADMIN_ROLES  = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const ADMIN_ROLES   = ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
 const AGENT_ROLES  = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
+const MANAGER_ROLES = ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'];
 
 export default function App() {
   const { user } = useAuth();
@@ -95,6 +102,44 @@ export default function App() {
           element={
             <ProtectedRoute roles={[...AGENT_ROLES]}>
               <KBEditorPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Employee device requests */}
+        <Route
+          path="/devices/request"
+          element={<ProtectedRoute><DeviceRequestPage /></ProtectedRoute>}
+        />
+        <Route
+          path="/devices/my-requests"
+          element={<ProtectedRoute><MyDeviceRequestsPage /></ProtectedRoute>}
+        />
+
+        {/* IT Admin device management */}
+        <Route
+          path="/admin/devices"
+          element={
+            <ProtectedRoute roles={IT_ADMIN_ROLES}>
+              <DeviceRegisterPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/device-requests"
+          element={
+            <ProtectedRoute roles={IT_ADMIN_ROLES}>
+              <DeviceRequestQueuePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Manager approvals */}
+        <Route
+          path="/manager/approvals"
+          element={
+            <ProtectedRoute roles={MANAGER_ROLES}>
+              <ManagerApprovalsPage />
             </ProtectedRoute>
           }
         />
