@@ -2,7 +2,7 @@
 // Run: node e2e-audit.mjs
 import { execSync } from 'node:child_process';
 
-const API = 'http://localhost:3000/api';
+const API = 'http://localhost:3007/api';
 const PG = 'docker exec ticketzilla-postgres-1 psql -U postgres -d ticketzilla -t -A -c';
 const sql = (q) => execSync(`${PG} "${q.replace(/"/g, '\\"')}"`).toString().trim();
 

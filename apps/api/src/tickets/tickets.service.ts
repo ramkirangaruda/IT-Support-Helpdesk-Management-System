@@ -34,7 +34,10 @@ const DETAIL_INCLUDE = TICKET_DETAIL_INCLUDE;
 
 type Scope = 'all' | 'assigned' | 'own';
 
-const ALL_ROLES:      RoleName[] = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN, RoleName.MANAGER, RoleName.FINANCE];
+// Per RBAC matrix §3.4 the ticket-handling roles are EMPLOYEE / AGENT / IT_ADMIN /
+// L2_L3 / SYS_ADMIN. MANAGER and FINANCE are procurement roles and are NOT granted
+// ticket visibility — they fall through to 'own' scope (they can still raise tickets).
+const ALL_ROLES:      RoleName[] = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
 const ASSIGNED_ROLES: RoleName[] = [RoleName.AGENT, RoleName.L2_L3];
 
 function visibilityScope(user: AuthenticatedUser): Scope {
@@ -42,10 +45,6 @@ function visibilityScope(user: AuthenticatedUser): Scope {
   if (roles.some(r => ALL_ROLES.includes(r)))      return 'all';
   if (roles.some(r => ASSIGNED_ROLES.includes(r))) return 'assigned';
   return 'own';
-}
-
-function isAgentOrAbove(user: AuthenticatedUser): boolean {
-  return visibilityScope(user) !== 'own';
 }
 
 // Map a target TicketStatus to the right notification event
@@ -69,6 +68,23 @@ export class TicketsService {
     private readonly notifications: NotificationsService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  // ── Write-side authorization ────────────────────────────────────────────────
+  // Read scoping is handled by visibilityScope; write actions (comment, status
+  // change, resolve) must ALSO honour the same scope per §3.4 — agents/L2-L3 may
+  // only act on tickets assigned to them, employees only on their own.
+  private assertWriteScope(
+    ticket: { requesterId: string; assigneeId: string | null },
+    actor: AuthenticatedUser,
+  ): void {
+    const scope = visibilityScope(actor);
+    if (scope === 'own' && ticket.requesterId !== actor.id) {
+      throw new ForbiddenException('You can only act on your own tickets');
+    }
+    if (scope === 'assigned' && ticket.assigneeId !== actor.id) {
+      throw new ForbiddenException('You can only act on tickets assigned to you');
+    }
+  }
 
   // ── ID generation ─────────────────────────────────────────────────────────
   // Uses findFirst+orderBy desc on the INC-YYYY prefix so deleted tickets
@@ -264,10 +280,8 @@ export class TicketsService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
+    this.assertWriteScope(ticket, actor);
     const scope = visibilityScope(actor);
-    if (scope === 'own' && ticket.requesterId !== actor.id) {
-      throw new ForbiddenException('You can only comment on your own tickets');
-    }
 
     if (this.stateMachine.isTerminal(ticket.status)) {
       throw new BadRequestException(`Ticket is ${ticket.status} — comments are locked`);
@@ -307,6 +321,13 @@ export class TicketsService {
     if (!dto.resolutionSummary?.trim()) {
       throw new BadRequestException('resolutionSummary must not be empty');
     }
+
+    const existing = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { requesterId: true, assigneeId: true },
+    });
+    if (!existing) throw new NotFoundException(`Ticket ${ticketId} not found`);
+    this.assertWriteScope(existing, actor);
 
     const updated = await this.stateMachine.transition(
       ticketId,
@@ -365,25 +386,37 @@ export class TicketsService {
 
   // ── 8. TRANSITION (generic) ───────────────────────────────────────────────
   async transition(id: string, dto: TransitionStatusDto, actor: AuthenticatedUser) {
-    if (!isAgentOrAbove(actor)) {
-      const existing = await this.prisma.ticket.findUnique({
-        where: { id },
-        select: { requesterId: true, status: true },
-      });
-      if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
+    const existing = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: { requesterId: true, assigneeId: true, status: true },
+    });
+    if (!existing) throw new NotFoundException(`Ticket ${id} not found`);
+
+    const scope = visibilityScope(actor);
+    if (scope === 'own') {
       if (existing.requesterId !== actor.id) {
         throw new ForbiddenException('You can only manage your own tickets');
       }
-      // Employees may cancel any of their open tickets, or close a resolved one.
+      // §3.4 — employees may cancel, reopen, or confirm resolution of their own tickets.
       const employeeAllowed =
         dto.toStatus === TicketStatus.CANCELLED ||
+        dto.toStatus === TicketStatus.REOPENED ||
         (dto.toStatus === TicketStatus.CLOSED && existing.status === TicketStatus.RESOLVED);
       if (!employeeAllowed) {
         throw new ForbiddenException(
-          'Employees may only cancel open tickets or confirm resolution of resolved tickets',
+          'Employees may only cancel, reopen, or confirm resolution of their own tickets',
         );
       }
+    } else if (scope === 'assigned') {
+      if (existing.assigneeId !== actor.id) {
+        throw new ForbiddenException('You can only manage tickets assigned to you');
+      }
+      // §3.4 — Reopen is restricted to IT Admin / Sys Admin.
+      if (dto.toStatus === TicketStatus.REOPENED) {
+        throw new ForbiddenException('Reopening is restricted to IT Admin / Sys Admin');
+      }
     }
+    // scope === 'all' (IT_ADMIN / SYS_ADMIN) → any valid transition
 
     const updated = await this.stateMachine.transition(id, dto.toStatus, actor.id, dto.reason);
 

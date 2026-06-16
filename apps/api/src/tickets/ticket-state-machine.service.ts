@@ -62,6 +62,21 @@ export class TicketStateMachineService {
     return ALLOWED[status];
   }
 
+  /** §4.4 reopen window: reject Closed → Reopened past REOPEN_WINDOW_DAYS (default 7). */
+  private async assertWithinReopenWindow(closedAt: Date | null): Promise<void> {
+    if (!closedAt) return; // no close timestamp recorded — allow
+    const cfg = await this.prisma.systemConfig.findUnique({
+      where: { key: 'REOPEN_WINDOW_DAYS' },
+    });
+    const days = cfg ? parseInt(cfg.value, 10) : 7;
+    const deadline = closedAt.getTime() + days * 24 * 60 * 60 * 1000;
+    if (Date.now() > deadline) {
+      throw new BadRequestException(
+        `Reopen window of ${days} day(s) has expired (ticket closed ${closedAt.toISOString()})`,
+      );
+    }
+  }
+
   /**
    * Returns true for states where metadata edits and new comments are blocked.
    * CLOSED can still be re-opened via transition, but data entry is locked.
@@ -88,6 +103,11 @@ export class TicketStateMachineService {
       throw new BadRequestException(
         `Invalid transition: ${existing.status} → ${toStatus}. Allowed: [${allowed.join(', ') || 'none — terminal state'}]`,
       );
+    }
+
+    // §4.4 — Closed → Reopened is permitted only within the configurable reopen window.
+    if (existing.status === TicketStatus.CLOSED && toStatus === TicketStatus.REOPENED) {
+      await this.assertWithinReopenWindow(existing.closedAt);
     }
 
     const now = new Date();

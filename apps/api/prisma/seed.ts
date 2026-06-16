@@ -174,6 +174,7 @@ async function seedSystemConfig(): Promise<void> {
   const configs = [
     { key: 'MAX_DEVICES_PER_EMPLOYEE', value: '2' },
     { key: 'REMINDER_CADENCE_DAYS',    value: '3' },
+    { key: 'REOPEN_WINDOW_DAYS',       value: '7' },
   ];
   for (const cfg of configs) {
     await prisma.systemConfig.upsert({

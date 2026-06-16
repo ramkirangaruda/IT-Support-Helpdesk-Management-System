@@ -126,7 +126,7 @@ export class TicketsController {
   // ── POST /tickets/:id/resolve ─────────────────────────────────────────────
   // Requires non-empty resolutionSummary; stored as StatusHistory.reason
   @Post(':id/resolve')
-  @Roles(RoleName.AGENT, RoleName.IT_ADMIN)
+  @Roles(RoleName.AGENT, RoleName.L2_L3, RoleName.IT_ADMIN, RoleName.SYS_ADMIN)
   resolve(
     @Param('id') id: string,
     @Body() dto: ResolveTicketDto,

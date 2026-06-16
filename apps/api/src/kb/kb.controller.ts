@@ -18,7 +18,8 @@ import { ListArticlesDto } from './dto/list-articles.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { KbService } from './kb.service';
 
-const EDITOR_ROLES = [RoleName.AGENT, RoleName.L2_L3, RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
+// §3.4 — "Manage AI knowledge base" is granted to IT Admin / Sys Admin only.
+const EDITOR_ROLES = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
 const PUBLISH_ROLES = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
 
 @Controller('kb/articles')
