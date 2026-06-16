@@ -32,6 +32,13 @@ npm-debug.log*
 .claude/settings.json
 .claude/settings.local.json
 
+# Audit scratch + runtime logs (2026-06-16 audit)
+/e2e-audit*.mjs
+/api-run.log
+/api-3007.log
+/prod-test.log
+apps/api/scripts/import/logs/
+
 # OS
 .DS_Store
 Thumbs.db

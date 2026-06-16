@@ -9,6 +9,7 @@ import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { RecordPoDto } from './dto/record-po.dto';
 import { RecordReceiptDto } from './dto/record-receipt.dto';
+import { UpdatePurchaseRequestDto } from './dto/update-purchase-request.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 
 const ADMIN_ROLES    = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
@@ -44,6 +45,27 @@ export class PurchaseRequestController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.getOne(id, user);
+  }
+
+  // PATCH /purchase-requests/:id — edit a RAISED draft (IT_ADMIN / SYS_ADMIN)
+  @Patch(':id')
+  @Roles(...ADMIN_ROLES)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePurchaseRequestDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.update(id, dto, user);
+  }
+
+  // POST /purchase-requests/:id/submit — move RAISED → PENDING_MANAGER_APPROVAL
+  @Post(':id/submit')
+  @Roles(...ADMIN_ROLES)
+  submit(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.submit(id, user);
   }
 
   // POST /purchase-requests/:id/approve

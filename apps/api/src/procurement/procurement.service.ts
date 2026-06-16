@@ -22,6 +22,7 @@ import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { RecordPoDto } from './dto/record-po.dto';
 import { RecordReceiptDto } from './dto/record-receipt.dto';
+import { UpdatePurchaseRequestDto } from './dto/update-purchase-request.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -172,6 +173,79 @@ export class ProcurementService {
     });
 
     return { ...pr, approvalSteps };
+  }
+
+  // ── Draft edit + submit (RAISED PRs) ──────────────────────────────────────
+  // Auto-created PRs land in RAISED with placeholder cost/budget. An admin
+  // fills in the real values here, then submits into the approval chain.
+
+  async update(id: string, dto: UpdatePurchaseRequestDto, actor: AuthenticatedUser) {
+    const pr = await this.prisma.purchaseRequest.findUnique({ where: { id } });
+    if (!pr) throw new NotFoundException(`PurchaseRequest ${id} not found`);
+    if (pr.status !== PurchaseRequestStatus.RAISED) {
+      throw new BadRequestException(
+        `Only RAISED (draft) purchase requests can be edited (current: ${pr.status})`,
+      );
+    }
+
+    const updated = await this.prisma.purchaseRequest.update({
+      where: { id },
+      data: {
+        ...(dto.itemSpec   !== undefined && { itemSpec:   dto.itemSpec }),
+        ...(dto.quantity   !== undefined && { quantity:   dto.quantity }),
+        ...(dto.estCost    !== undefined && { estCost:    dto.estCost }),
+        ...(dto.budgetCode !== undefined && { budgetCode: dto.budgetCode }),
+      },
+      include: PR_INCLUDE,
+    });
+
+    await this.audit.log({
+      actorId:  actor.id,
+      entity:   'PurchaseRequest',
+      entityId: id,
+      action:   'UPDATE',
+      before:   { itemSpec: pr.itemSpec, estCost: pr.estCost?.toString(), budgetCode: pr.budgetCode },
+      after:    { itemSpec: updated.itemSpec, estCost: updated.estCost?.toString(), budgetCode: updated.budgetCode },
+    });
+
+    return updated;
+  }
+
+  async submit(id: string, actor: AuthenticatedUser) {
+    const pr = await this.prisma.purchaseRequest.findUnique({
+      where:   { id },
+      include: PR_INCLUDE,
+    });
+    if (!pr) throw new NotFoundException(`PurchaseRequest ${id} not found`);
+    if (pr.status !== PurchaseRequestStatus.RAISED) {
+      throw new BadRequestException(
+        `Only RAISED (draft) purchase requests can be submitted (current: ${pr.status})`,
+      );
+    }
+    if (pr.budgetCode === 'TBD' || Number(pr.estCost) <= 0) {
+      throw new BadRequestException(
+        'Set a real budget code and estimated cost before submitting for approval',
+      );
+    }
+
+    const updated = await this.prisma.purchaseRequest.update({
+      where:   { id },
+      data:    { status: PurchaseRequestStatus.PENDING_MANAGER_APPROVAL },
+      include: PR_INCLUDE,
+    });
+
+    await this.audit.log({
+      actorId:  actor.id,
+      entity:   'PurchaseRequest',
+      entityId: id,
+      action:   'SUBMIT',
+      before:   { status: PurchaseRequestStatus.RAISED },
+      after:    { status: PurchaseRequestStatus.PENDING_MANAGER_APPROVAL },
+    });
+
+    await this.notifyManagers(pr.id, pr.itemSpec, pr.raisedBy.name);
+
+    return updated;
   }
 
   // ── Approval flow ─────────────────────────────────────────────────────────

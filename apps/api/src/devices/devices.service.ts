@@ -406,8 +406,21 @@ export class DevicesService {
       throw new BadRequestException(`Device ${dto.deviceId} is not AVAILABLE (current: ${device.status})`);
     }
 
-    const [allocation] = await this.prisma.$transaction([
-      this.prisma.deviceAllocation.create({
+    // Interactive transaction with an atomic device claim. updateMany with a
+    // status=AVAILABLE guard is serialized at the row level by Postgres, so two
+    // concurrent allocations cannot both succeed: the loser sees count===0.
+    const allocation = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.device.updateMany({
+        where: { id: dto.deviceId, status: DeviceStatus.AVAILABLE },
+        data:  { status: DeviceStatus.ALLOCATED },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException(
+          `Device ${dto.deviceId} was just allocated by another request — please pick another device`,
+        );
+      }
+
+      const created = await tx.deviceAllocation.create({
         data: {
           deviceId:        dto.deviceId,
           employeeId:      request.requesterId,
@@ -420,16 +433,15 @@ export class DevicesService {
           device:   { select: { id: true, type: true, makeModel: true, serialNumber: true } },
           employee: { select: { id: true, name: true, email: true } },
         },
-      }),
-      this.prisma.device.update({
-        where: { id: dto.deviceId },
-        data:  { status: DeviceStatus.ALLOCATED },
-      }),
-      this.prisma.deviceRequest.update({
+      });
+
+      await tx.deviceRequest.update({
         where: { id: requestId },
         data:  { status: DeviceRequestStatus.ALLOCATED },
-      }),
-    ]);
+      });
+
+      return created;
+    });
 
     await this.audit.log({
       actorId:  actor.id,

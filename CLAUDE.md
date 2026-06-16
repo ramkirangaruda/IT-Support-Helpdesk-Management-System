@@ -38,7 +38,22 @@ Use @Public() to opt routes out of auth. Use @Roles(...RoleName) for RBAC.
 Use @CurrentUser() to access the authenticated user in a controller.
 
 ## Current phase
-COMPLETE — all 5 phases built and TypeScript-clean. E2E testing pending Docker environment.
+COMPLETE — all 5 phases built and TypeScript-clean.
+
+## Audit (2026-06-16)
+Full audit performed against a live stack (Postgres+Redis on Docker, API run locally).
+- E2E TEST 1–4 PASS (lifecycle, SLA math, escalation+idempotency, RBAC, full device→procurement chain, reminder cycles). TEST 5 (chat deflection/draft) deferred — needs the Python AI service + a real LLM_API_KEY.
+- Fixes applied & verified: (1) auto-created purchase requests were stuck at RAISED — added `PATCH /purchase-requests/:id` + `POST /purchase-requests/:id/submit`; (2) device double-allocation race — `allocate()` now claims the device atomically inside an interactive transaction.
+- Open findings (see audit report): MANAGER/FINANCE see all tickets + no manager→team scoping; no procurement separation-of-duties (admin can approve both stages); Prisma errors surface as 500 (no 409 mapping); ticket/PR/device ID generation 500s under high concurrency (no dup IDs persist); AI service published to host in dev compose; npm audit highs; no admin view of FAILED notifications; health endpoint behind JWT.
+- `docker-compose.prod.yml` drafted (no host-exposed datastores, env secrets, healthchecks, restart policies, resource limits).
+- Spec conformance (§4.4 transitions, §4.5.2 SLA hours, RBAC matrix): code extracted & internally consistent; final "matches spec exactly" verdict pending the external spec document.
+
+## Data import scaffolding
+`apps/api/scripts/import/` — generic CSV importers run via ts-node.
+- `import-employees.ts` (name,email,department,ssoSubject) upserts Users + ensures EMPLOYEE role.
+- `import-devices.ts` (type,makeModel,serialNumber,status,condition,purchasedOn,cost) creates Device records.
+- `csv-utils.ts` shared (dependency-free parser, dry-run report, per-row audit log under logs/).
+Pattern: validate ALL rows first; dry-run by default; only writes with `--commit`; any malformed row aborts the commit. To add more importers (e.g. tickets), copy import-devices.ts and swap the row type/validation/dedupe key.
 
 ## Dev-only endpoints (NODE_ENV ≠ production)
 - POST /api/auth/dev-login — get a JWT for any test user
