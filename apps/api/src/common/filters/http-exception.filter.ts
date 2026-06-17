@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -30,6 +31,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const b = body as Record<string, unknown>;
         message = (b['message'] as string | string[]) ?? message;
         error   = (b['error']   as string)             ?? exception.name;
+      }
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002 = unique-constraint violation → 409 Conflict
+      if (exception.code === 'P2002') {
+        const fields = (exception.meta?.['target'] as string[] | undefined)?.join(', ') ?? 'field';
+        statusCode = HttpStatus.CONFLICT;
+        error      = 'Conflict';
+        message    = `A record with the same ${fields} already exists`;
+      } else {
+        this.logger.error(`Prisma error ${exception.code}`, exception.message);
       }
     } else {
       this.logger.error('Unhandled exception', exception instanceof Error ? exception.stack : String(exception));

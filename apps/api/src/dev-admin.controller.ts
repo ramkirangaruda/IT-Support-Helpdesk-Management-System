@@ -1,13 +1,17 @@
-import { Controller, ForbiddenException, Post } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Post, Query } from '@nestjs/common';
+import { NotificationStatus, RoleName } from '@prisma/client';
+import { Roles } from './auth/decorators/roles.decorator';
 import { Public } from './auth/decorators/public.decorator';
 import { DeviceReminderProcessor } from './devices/device-reminder.processor';
+import { NotificationsService } from './notifications/notifications.service';
 import { SlaProcessor } from './sla/sla.processor';
 
 @Controller('admin')
 export class DevAdminController {
   constructor(
-    private readonly slaProcessor:    SlaProcessor,
-    private readonly deviceProcessor: DeviceReminderProcessor,
+    private readonly slaProcessor:         SlaProcessor,
+    private readonly deviceProcessor:      DeviceReminderProcessor,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Post('trigger-escalation-check')
@@ -28,5 +32,21 @@ export class DevAdminController {
     }
     await this.deviceProcessor.checkDeviceLimits();
     return { ok: true, message: 'Device limit check complete — see server logs for details' };
+  }
+
+  /**
+   * GET /api/admin/notifications?status=FAILED&limit=50
+   * Returns notifications filtered by status. Default status = FAILED.
+   * Restricted to IT_ADMIN and SYS_ADMIN in all environments.
+   */
+  @Get('notifications')
+  @Roles(RoleName.IT_ADMIN, RoleName.SYS_ADMIN)
+  listNotifications(
+    @Query('status') status?: string,
+    @Query('limit')  limit?:  string,
+  ) {
+    const ns  = (status?.toUpperCase() as NotificationStatus | undefined) ?? NotificationStatus.FAILED;
+    const lim = limit ? parseInt(limit, 10) : 100;
+    return this.notificationsService.listByStatus(ns, lim);
   }
 }

@@ -318,7 +318,9 @@ export class DevicesService {
   async makeDecision(id: string, dto: DeviceDecisionDto, actor: AuthenticatedUser) {
     const request = await this.prisma.deviceRequest.findUnique({
       where:   { id },
-      include: { requester: { select: { id: true, name: true, email: true } } },
+      include: {
+        requester: { select: { id: true, name: true, email: true, managerId: true } },
+      },
     });
     if (!request) throw new NotFoundException(`DeviceRequest ${id} not found`);
 
@@ -328,6 +330,19 @@ export class DevicesService {
     ];
     if (!allowedStatuses.includes(request.status)) {
       throw new BadRequestException(`Cannot decide on a request with status ${request.status}`);
+    }
+
+    // §B — if the requester has a managerId set, only that specific manager may approve.
+    // IT_ADMIN/SYS_ADMIN bypass this check so fulfilment is never blocked by missing org-chart data.
+    const isAdmin = actor.roles.some(r => r === RoleName.IT_ADMIN || r === RoleName.SYS_ADMIN);
+    const hasManagerRole = actor.roles.includes(RoleName.MANAGER);
+    if (hasManagerRole && !isAdmin) {
+      const requesterManagerId = (request.requester as { managerId?: string | null }).managerId;
+      if (requesterManagerId && requesterManagerId !== actor.id) {
+        throw new ForbiddenException(
+          'You are not the reporting manager for the requester of this device request',
+        );
+      }
     }
 
     const newStatus = dto.decision === DecisionValue.APPROVED

@@ -278,4 +278,17 @@ export class NotificationsService {
       );
     }
   }
+
+  // ── Admin helpers ─────────────────────────────────────────────────────────
+
+  async listByStatus(status: NotificationStatus, limit = 100) {
+    return this.prisma.notification.findMany({
+      where:   { status },
+      include: {
+        ticket: { select: { id: true, subject: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    Math.min(limit, 500),
+    });
+  }
 }

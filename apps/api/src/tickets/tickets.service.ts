@@ -112,7 +112,8 @@ export class TicketsService {
 
   // ── 1. CREATE ─────────────────────────────────────────────────────────────
   async create(dto: CreateTicketDto, actor: AuthenticatedUser) {
-    const id  = await this.generateId();
+    let id: string;
+    let attempts = 0;
     const now = new Date();
 
     const slaPolicy = await this.prisma.sLAPolicy.findUnique({
@@ -124,29 +125,42 @@ export class TicketsService {
 
     const initialStatus = dto.assigneeId ? TicketStatus.ASSIGNED : TicketStatus.NEW;
 
-    const ticket = await this.prisma.ticket.create({
-      data: {
-        id,
-        subject:     dto.subject,
-        description: dto.description,
-        priority:    dto.priority,
-        source:      dto.source,
-        categoryId:  dto.categoryId,
-        requesterId: actor.id,
-        assigneeId:  dto.assigneeId ?? null,
-        status:      initialStatus,
-        ...sla,
-        statusHistory: {
-          create: {
-            fromStatus: null,
-            toStatus:   initialStatus,
-            actorId:    actor.id,
-            reason:     'Ticket created',
+    // ID-gen retry: re-generate on P2002 (PK collision under concurrency), up to 3 times
+    let ticket: Awaited<ReturnType<typeof this.prisma.ticket.create>>;
+    while (true) {
+      id = await this.generateId();
+      try {
+        ticket = await this.prisma.ticket.create({
+          data: {
+            id,
+            subject:     dto.subject,
+            description: dto.description,
+            priority:    dto.priority,
+            source:      dto.source,
+            categoryId:  dto.categoryId,
+            requesterId: actor.id,
+            assigneeId:  dto.assigneeId ?? null,
+            status:      initialStatus,
+            ...sla,
+            statusHistory: {
+              create: {
+                fromStatus: null,
+                toStatus:   initialStatus,
+                actorId:    actor.id,
+                reason:     'Ticket created',
+              },
+            },
           },
-        },
-      },
-      include: DETAIL_INCLUDE,
-    });
+          include: DETAIL_INCLUDE,
+        });
+        break;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' && ++attempts < 3) {
+          continue;
+        }
+        throw err;
+      }
+    }
 
     await this.audit.log({
       actorId:  actor.id,

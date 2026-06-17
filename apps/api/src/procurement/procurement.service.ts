@@ -262,14 +262,16 @@ export class ProcurementService {
     }
 
     const hasRole = (r: RoleName) => actor.roles.includes(r);
-    const isAdmin = hasRole(RoleName.IT_ADMIN) || hasRole(RoleName.SYS_ADMIN);
+    // §B — IT_ADMIN removed from approve stages: they raise/submit PRs so must not also approve them.
+    // SYS_ADMIN retains god-mode override for operational unblocking.
+    const isSysAdmin = hasRole(RoleName.SYS_ADMIN);
 
     let newStatus: PurchaseRequestStatus;
     let actorRoleLabel: string;
 
     if (pr.status === PurchaseRequestStatus.PENDING_MANAGER_APPROVAL) {
-      if (!hasRole(RoleName.MANAGER) && !isAdmin) {
-        throw new ForbiddenException('Only managers (or admins) can approve at this stage');
+      if (!hasRole(RoleName.MANAGER) && !isSysAdmin) {
+        throw new ForbiddenException('Only managers (or SYS_ADMIN) can approve at this stage');
       }
       actorRoleLabel = 'MANAGER';
       if (dto.decision === ApprovePrDecision.APPROVED) {
@@ -280,8 +282,19 @@ export class ProcurementService {
         newStatus = PurchaseRequestStatus.ON_HOLD;
       }
     } else if (pr.status === PurchaseRequestStatus.PENDING_FINANCE_APPROVAL) {
-      if (!hasRole(RoleName.FINANCE) && !isAdmin) {
-        throw new ForbiddenException('Only finance (or admins) can approve at this stage');
+      if (!hasRole(RoleName.FINANCE) && !isSysAdmin) {
+        throw new ForbiddenException('Only finance (or SYS_ADMIN) can approve at this stage');
+      }
+      // §B — separation-of-duties: same person cannot approve both manager and finance stages
+      if (!isSysAdmin) {
+        const priorManagerStep = await this.prisma.approvalStep.findFirst({
+          where: { parentType: 'PurchaseRequest', parentId: id, role: 'MANAGER', approverId: actor.id },
+        });
+        if (priorManagerStep) {
+          throw new ForbiddenException(
+            'Separation of duties: the same person cannot approve both manager and finance stages',
+          );
+        }
       }
       actorRoleLabel = 'FINANCE';
       if (dto.decision === ApprovePrDecision.APPROVED) {
@@ -292,9 +305,9 @@ export class ProcurementService {
         newStatus = PurchaseRequestStatus.ON_HOLD;
       }
     } else if (pr.status === PurchaseRequestStatus.ON_HOLD) {
-      // IT_ADMIN can re-submit an ON_HOLD PR back into the approval chain
-      if (!isAdmin) throw new ForbiddenException('Only admins can re-activate an on-hold request');
-      actorRoleLabel = 'IT_ADMIN';
+      // Only SYS_ADMIN can re-submit an ON_HOLD PR back into the approval chain
+      if (!isSysAdmin) throw new ForbiddenException('Only SYS_ADMIN can re-activate an on-hold request');
+      actorRoleLabel = 'SYS_ADMIN';
       newStatus = dto.decision === ApprovePrDecision.REJECTED
         ? PurchaseRequestStatus.REJECTED
         : PurchaseRequestStatus.PENDING_MANAGER_APPROVAL;

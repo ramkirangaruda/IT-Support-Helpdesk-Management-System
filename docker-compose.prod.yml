@@ -125,7 +125,38 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
+  # Nightly DB backup at 02:00 UTC. Backups land in the host-mounted /backups volume.
+  # Restore: docker run --rm -v /backups:/backups -e PGPASSWORD=... postgres:15-alpine \
+  #   pg_restore -h <host> -U <user> -d ticketzilla /backups/<file>.dump
+  pg-backup:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-ticketzilla}
+      BACKUP_DIR: /backups
+      RETAIN_DAYS: "14"
+    volumes:
+      - ./scripts/backup/pg-backup.sh:/pg-backup.sh:ro
+      - pg_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run once on start, then sleep until next 02:00 UTC via crond
+    command: >
+      sh -c "
+        chmod +x /pg-backup.sh &&
+        echo '0 2 * * * /pg-backup.sh >> /var/log/pg-backup.log 2>&1' | crontab - &&
+        crond -f -l 8
+      "
+    mem_limit: 256m
+    cpus: 0.25
+
 volumes:
   postgres_data:
   redis_data:
   chroma_data:
+  pg_backups:

@@ -102,6 +102,14 @@ model User {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
+  // §3.4 — reporting line for device-request manager scoping
+  managerId  String?
+  manager    User?      @relation("UserManager", fields: [managerId], references: [id])
+  reports    User[]     @relation("UserManager")
+
+  // §3.4 — team grouping for Agent/L2-L3 dashboard scope
+  teamId     String?
+
   ticketsRaised   Ticket[]        @relation("TicketRequester")
   ticketsAssigned Ticket[]        @relation("TicketAssignee")
   comments        Comment[]
