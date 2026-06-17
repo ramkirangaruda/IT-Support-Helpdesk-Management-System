@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { RoleName } from '@prisma/client';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { DeviceRequestStatus, RoleName } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -24,10 +24,13 @@ export class DeviceRequestsController {
     return this.devicesService.createRequest(dto, user);
   }
 
-  // GET /device-requests — scoped: employee=own, admin/manager=all
+  // GET /device-requests — scoped: employee=own, manager=pending-approval, admin=all
   @Get()
-  list(@CurrentUser() user: AuthenticatedUser) {
-    return this.devicesService.listRequests(user);
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('status') status?: DeviceRequestStatus,
+  ) {
+    return this.devicesService.listRequests(user, status);
   }
 
   // GET /device-requests/:id

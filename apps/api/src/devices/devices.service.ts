@@ -293,10 +293,22 @@ export class DevicesService {
     return request;
   }
 
-  async listRequests(actor: AuthenticatedUser) {
-    const isAdmin = actor.roles.some(r => OPEN_ROLES.includes(r));
+  async listRequests(actor: AuthenticatedUser, status?: DeviceRequestStatus) {
+    const isAdmin   = actor.roles.some(r => (r as RoleName) === RoleName.IT_ADMIN || (r as RoleName) === RoleName.SYS_ADMIN);
+    const isManager = actor.roles.includes(RoleName.MANAGER);
+
+    let where: Record<string, unknown>;
+    if (isAdmin) {
+      where = status ? { status } : {};
+    } else if (isManager) {
+      // Managers only see requests pending their approval
+      where = { status: status ?? DeviceRequestStatus.PENDING_MANAGER_APPROVAL };
+    } else {
+      where = { requesterId: actor.id, ...(status && { status }) };
+    }
+
     return this.prisma.deviceRequest.findMany({
-      where:   isAdmin ? {} : { requesterId: actor.id },
+      where,
       include: REQUEST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
