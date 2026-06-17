@@ -145,6 +145,40 @@ Real credentials-based auth is now in place alongside dev-login and OIDC.
 - Returned in any API response (all user queries use explicit select without passwordHash)
 - Logged anywhere (AuditLog before/after fields explicitly exclude passwordHash)
 
+## Frontend navigation (2026-06-17)
+Navigation is a **collapsible left sidebar** (not a top nav bar). There is no top nav.
+
+- **Location:** `apps/web/src/components/Sidebar.tsx`
+- **Width:** 240 px expanded / 64 px collapsed (icon-only); toggle button top-right of sidebar
+- **Persistence:** collapse state saved to `localStorage` key `sidebar-collapsed`
+- **Mobile:** auto-collapses when `window.innerWidth < 768 px` on mount
+
+**Universal landing page:** `/dashboard` for ALL roles. `/` and `*` redirect there when authenticated.
+
+**Role-based sidebar sections and items:**
+
+| Section | Items | Roles that see it |
+|---|---|---|
+| DASHBOARD | Dashboard | All authenticated |
+| TICKETS | My Tickets, My Queue\*, Triage Queue\*, New Ticket | All; \*agents/admins only |
+| DEVICES | My Devices, Request Device, Device Register\*, Device Requests\*, Approvals\* | All; \*IT_ADMIN/SYS_ADMIN/MANAGER |
+| PROCUREMENT | Pipeline | IT_ADMIN, SYS_ADMIN |
+| KNOWLEDGE BASE | Browse Articles, Manage Articles\* | All; \*agents+ |
+| ADMINISTRATION | Ticket Queue, Assign Tickets, Purchase Requests, Pending Users, Notification Log | IT_ADMIN, SYS_ADMIN only |
+| FINANCE | Purchase Requests, Approvals | FINANCE only |
+
+**Role-conditional dashboard views** (all at `/dashboard`):
+- IT_ADMIN / SYS_ADMIN → full admin charts (tickets by priority/category, agent workload, SLA metrics, overdue devices)
+- AGENT / L2_L3 → agent queue summary (open/escalated counts)
+- MANAGER → pending approval counts (device + purchase requests)
+- FINANCE → pending finance approvals + pipeline value
+- EMPLOYEE → personal overview (own tickets + devices, quick-action buttons)
+
+**Pages added:**
+- `apps/web/src/pages/RegisterPage.tsx` — self-registration at `/register`
+- `apps/web/src/pages/admin/AdminPendingUsersPage.tsx` — pending user approvals at `/admin/pending-users`
+- `apps/web/src/pages/admin/AdminNotificationsPage.tsx` — notification log at `/admin/notifications` (auto-refresh 30 s)
+
 ## Admin endpoints (all environments, IT_ADMIN/SYS_ADMIN only)
 - GET /api/admin/notifications?status=FAILED&limit=100 — view failed notification records + repeated login failures
 - GET /api/admin/pending-users — list accounts pending approval

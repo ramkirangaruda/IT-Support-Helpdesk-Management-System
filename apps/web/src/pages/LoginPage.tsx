@@ -32,7 +32,7 @@ function DevLoginForm() {
     try {
       const res = await api.post<{ access_token: string }>('/auth/dev-login', { email });
       login(res.data.access_token);
-      navigate('/tickets', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -105,7 +105,7 @@ function RealLoginForm() {
     try {
       const res = await api.post<{ access_token: string }>('/auth/login', { email, password });
       login(res.data.access_token);
-      navigate('/tickets', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       const raw =
         (err as { response?: { data?: { message?: string | string[] } } })
@@ -186,7 +186,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   if (user) {
-    navigate('/tickets', { replace: true });
+    navigate('/dashboard', { replace: true });
     return null;
   }
 

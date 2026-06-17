@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../auth/useAuth';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -175,7 +176,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 type SortDir = 'asc' | 'desc';
 
-export default function DashboardPage() {
+function AdminDashboard() {
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo,   setExportTo]   = useState('');
   const [sortDir,    setSortDir]    = useState<SortDir>('asc');
@@ -658,4 +659,256 @@ export default function DashboardPage() {
       )}
     </Layout>
   );
+}
+
+// ── EMPLOYEE dashboard ─────────────────────────────────────────────────────
+
+interface MyTicket { id: string; status: string; priority: string }
+interface MyTicketsRes { data: MyTicket[]; total: number }
+interface MyDeviceReq { id: string; status: string }
+
+function EmployeeDashboard() {
+  const { data: ticketsRes } = useQuery<MyTicketsRes>({
+    queryKey: ['my-tickets-dashboard'],
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    refetchInterval: 60_000,
+  });
+  const { data: deviceReqs = [] } = useQuery<MyDeviceReq[]>({
+    queryKey: ['my-device-reqs-dashboard'],
+    queryFn: () => api.get<MyDeviceReq[]>('/device-requests').then(r => r.data),
+    refetchInterval: 60_000,
+  });
+
+  const OPEN = new Set(['NEW', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'ESCALATED', 'REOPENED']);
+  const myTickets = ticketsRes?.data ?? [];
+  const openCount = myTickets.filter(t => OPEN.has(t.status)).length;
+  const resolvedCount = myTickets.filter(t => t.status === 'RESOLVED').length;
+  const activeDevices = deviceReqs.filter(r => r.status === 'ALLOCATED').length;
+
+  return (
+    <Layout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Your personal overview</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <StatCard label="Open Tickets"     value={openCount}     highlight={openCount > 0 ? 'orange' : undefined} />
+        <StatCard label="Resolved Tickets" value={resolvedCount} highlight="indigo" />
+        <StatCard label="Active Devices"   value={activeDevices} />
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link
+          to="/tickets/new"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600
+                     text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+        >
+          + Raise a Ticket
+        </Link>
+        <Link
+          to="/devices/request"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300
+                     text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          Request a Device
+        </Link>
+        <Link
+          to="/tickets"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300
+                     text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          View My Tickets
+        </Link>
+      </div>
+    </Layout>
+  );
+}
+
+// ── AGENT / L2_L3 dashboard ────────────────────────────────────────────────
+
+function AgentDashboard() {
+  const { data: ticketsRes } = useQuery<MyTicketsRes>({
+    queryKey: ['agent-tickets-dashboard'],
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    refetchInterval: 60_000,
+  });
+
+  const OPEN = new Set(['NEW', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'ESCALATED', 'REOPENED']);
+  const tickets = ticketsRes?.data ?? [];
+  const openTickets = tickets.filter(t => OPEN.has(t.status));
+  const byStatus = openTickets.reduce<Record<string, number>>((acc, t) => {
+    acc[t.status] = (acc[t.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const critical = openTickets.filter(t => t.priority === 'CRITICAL').length;
+  const high     = openTickets.filter(t => t.priority === 'HIGH').length;
+
+  return (
+    <Layout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Your queue summary</p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Open in Queue"  value={openTickets.length} highlight={openTickets.length > 0 ? 'orange' : undefined} />
+        <StatCard label="Critical"       value={critical}           highlight={critical > 0 ? 'red' : undefined} />
+        <StatCard label="High"           value={high}               highlight={high > 0 ? 'orange' : undefined} />
+        <StatCard label="Total Assigned" value={tickets.length} />
+      </div>
+
+      {Object.keys(byStatus).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Open by Status</h2>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(byStatus).map(([status, count]) => (
+              <span key={status}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                           bg-indigo-50 text-indigo-700 border border-indigo-100">
+                {status.replace(/_/g, ' ')} · {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Link
+        to="/agent/tickets"
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600
+                   text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+      >
+        Open My Queue →
+      </Link>
+    </Layout>
+  );
+}
+
+// ── MANAGER dashboard ──────────────────────────────────────────────────────
+
+interface DevReq { id: string; status: string }
+interface PurchReq { id: string; status: string; estCost: string }
+
+function ManagerDashboard() {
+  const { data: deviceReqs = [] } = useQuery<DevReq[]>({
+    queryKey: ['mgr-device-reqs'],
+    queryFn: () =>
+      api.get<DevReq[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
+        .then(r => r.data),
+    refetchInterval: 60_000,
+  });
+  const { data: purchReqs = [] } = useQuery<PurchReq[]>({
+    queryKey: ['mgr-purch-reqs'],
+    queryFn: () => api.get<PurchReq[]>('/purchase-requests').then(r => r.data),
+    refetchInterval: 60_000,
+  });
+  const { data: ticketsRes } = useQuery<MyTicketsRes>({
+    queryKey: ['mgr-own-tickets'],
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    refetchInterval: 60_000,
+  });
+
+  const OPEN = new Set(['NEW', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'ESCALATED', 'REOPENED']);
+  const pendingPrs = purchReqs.filter(p =>
+    p.status === 'PENDING_MANAGER_APPROVAL' || p.status === 'PENDING_FINANCE_APPROVAL',
+  ).length;
+  const pendingTotal = deviceReqs.length + pendingPrs;
+  const openMyTickets = (ticketsRes?.data ?? []).filter(t => OPEN.has(t.status)).length;
+
+  return (
+    <Layout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Approvals & team overview</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <StatCard label="Pending Approvals"     value={pendingTotal}    highlight={pendingTotal > 0 ? 'yellow' : undefined} sub="device + purchase requests" />
+        <StatCard label="Device Req. Pending"   value={deviceReqs.length} />
+        <StatCard label="My Open Tickets"       value={openMyTickets} />
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link
+          to="/manager/approvals"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600
+                     text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+        >
+          Review Approvals →
+        </Link>
+        <Link
+          to="/tickets"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300
+                     text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          My Tickets
+        </Link>
+      </div>
+    </Layout>
+  );
+}
+
+// ── FINANCE dashboard ──────────────────────────────────────────────────────
+
+function FinanceDashboard() {
+  const { data: purchReqs = [] } = useQuery<PurchReq[]>({
+    queryKey: ['finance-purch-reqs'],
+    queryFn: () => api.get<PurchReq[]>('/purchase-requests').then(r => r.data),
+    refetchInterval: 60_000,
+  });
+
+  const TERMINAL = new Set(['RECEIVED', 'REJECTED']);
+  const pendingFinance = purchReqs.filter(p => p.status === 'PENDING_FINANCE_APPROVAL').length;
+  const pipelineValue  = purchReqs
+    .filter(p => !TERMINAL.has(p.status))
+    .reduce((sum, p) => sum + parseFloat(p.estCost || '0'), 0);
+
+  return (
+    <Layout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Procurement finance overview</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <StatCard
+          label="Pending Finance Approvals"
+          value={pendingFinance}
+          highlight={pendingFinance > 0 ? 'yellow' : undefined}
+        />
+        <StatCard
+          label="Active Pipeline Value"
+          value={`£${pipelineValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          highlight="indigo"
+          sub="active purchase requests"
+        />
+      </div>
+
+      <Link
+        to="/finance/approvals"
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600
+                   text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+      >
+        Review Finance Approvals →
+      </Link>
+    </Layout>
+  );
+}
+
+// ── Role router ────────────────────────────────────────────────────────────
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const roles = user?.roles ?? [];
+
+  const isAdmin   = roles.some(r => ['IT_ADMIN', 'SYS_ADMIN'].includes(r));
+  const isAgent   = roles.some(r => ['AGENT', 'L2_L3'].includes(r));
+  const isManager = roles.includes('MANAGER');
+  const isFinance = roles.includes('FINANCE');
+
+  if (isAdmin)   return <AdminDashboard />;
+  if (isAgent)   return <AgentDashboard />;
+  if (isManager) return <ManagerDashboard />;
+  if (isFinance) return <FinanceDashboard />;
+  return <EmployeeDashboard />;
 }

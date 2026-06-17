@@ -15,8 +15,8 @@ export default function ProtectedRoute({ roles, children }: Props) {
   }
 
   if (roles && !roles.some(r => user.roles.includes(r))) {
-    // Authenticated but wrong role — fall back to the default authed view
-    return <Navigate to="/tickets" replace />;
+    // Authenticated but wrong role — fall back to the default landing page
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
