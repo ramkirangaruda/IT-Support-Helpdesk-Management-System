@@ -243,28 +243,34 @@ export class TicketsService {
     const existing = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!existing) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    if (!this.stateMachine.canTransition(existing.status, TicketStatus.ASSIGNED)) {
+    const assignee = await this.prisma.user.findUnique({ where: { id: dto.assigneeId } });
+    if (!assignee) throw new NotFoundException(`User ${dto.assigneeId} not found`);
+
+    // If the ticket is NEW, transition to ASSIGNED.
+    // If already in an active state (ESCALATED, IN_PROGRESS, etc.), keep the current status
+    // and just swap the assignee — this enables L2/L3 re-assignment without a status reset.
+    const isFirstAssignment = existing.status === TicketStatus.NEW;
+    if (isFirstAssignment && !this.stateMachine.canTransition(existing.status, TicketStatus.ASSIGNED)) {
       throw new BadRequestException(
         `Cannot transition from ${existing.status} to ASSIGNED. Allowed: [${this.stateMachine.allowedFrom(existing.status).join(', ')}]`,
       );
     }
 
-    const assignee = await this.prisma.user.findUnique({ where: { id: dto.assigneeId } });
-    if (!assignee) throw new NotFoundException(`User ${dto.assigneeId} not found`);
+    const newStatus = isFirstAssignment ? TicketStatus.ASSIGNED : existing.status;
 
     const updated = await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
         assigneeId: dto.assigneeId,
-        status:     TicketStatus.ASSIGNED,
+        status:     newStatus,
         ...(dto.priority   !== undefined && { priority:   dto.priority   as Priority }),
         ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
         statusHistory: {
           create: {
             fromStatus: existing.status,
-            toStatus:   TicketStatus.ASSIGNED,
+            toStatus:   newStatus,
             actorId:    actor.id,
-            reason:     `Assigned to ${assignee.name ?? assignee.email}`,
+            reason:     `${isFirstAssignment ? 'Assigned' : 'Reassigned'} to ${assignee.name ?? assignee.email}`,
           },
         },
       },
@@ -277,10 +283,9 @@ export class TicketsService {
       entityId: ticketId,
       action:   'ASSIGN',
       before:   { status: existing.status, assigneeId: existing.assigneeId },
-      after:    { status: TicketStatus.ASSIGNED, assigneeId: dto.assigneeId },
+      after:    { status: newStatus, assigneeId: dto.assigneeId },
     });
 
-    // Notify assignee (agent assignment alert)
     await this.notifications.emit('ticket.assigned', ticketId, { actorEmail: actor.email });
 
     return updated;

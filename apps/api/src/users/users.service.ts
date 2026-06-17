@@ -6,12 +6,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(role?: RoleName) {
+  findAll(roles?: RoleName[]) {
     return this.prisma.user.findMany({
       where: {
         status: UserStatus.ACTIVE,
-        ...(role && {
-          userRoles: { some: { role: { name: role } } },
+        ...(roles && roles.length > 0 && {
+          userRoles: { some: { role: { name: { in: roles } } } },
         }),
       },
       select: { id: true, name: true, email: true, department: true },

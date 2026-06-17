@@ -156,7 +156,8 @@ function ResolveModal({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const AGENT_ROLES = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
+const AGENT_ROLES  = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
+const ADMIN_ROLES  = new Set(['IT_ADMIN', 'SYS_ADMIN']);
 // Statuses with dedicated buttons — excluded from the generic "Move Status" dropdown
 const SPECIAL_TRANSITIONS = new Set(['ON_HOLD', 'RESOLVED']);
 
@@ -166,7 +167,8 @@ export default function TicketDetailPage() {
   const queryClient = useQueryClient();
 
   const isEmployee = user?.roles.every(r => r === 'EMPLOYEE');
-  const isAgent = user?.roles.some(r => AGENT_ROLES.has(r));
+  const isAgent    = user?.roles.some(r => AGENT_ROLES.has(r));
+  const isAdmin    = user?.roles.some(r => ADMIN_ROLES.has(r));
 
   // Comment state
   const [commentBody, setCommentBody] = useState('');
@@ -177,6 +179,10 @@ export default function TicketDetailPage() {
   const [showOnHoldInput, setShowOnHoldInput] = useState(false);
   const [onHoldReason, setOnHoldReason] = useState('');
   const [showResolveModal, setShowResolveModal] = useState(false);
+
+  // AI Assist state
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiAction, setAiAction] = useState<string | null>(null);
 
   // ── Queries & mutations ───────────────────────────────────────────────────
 
@@ -215,6 +221,20 @@ export default function TicketDetailPage() {
     onSuccess: () => {
       setShowResolveModal(false);
       invalidate();
+    },
+  });
+
+  const agentAssistMutation = useMutation({
+    mutationFn: ({ action, summary, comments }: { action: string; summary: string; comments: string[] }) =>
+      api.post<{ result: string }>('/ai/agent-assist', {
+        ticket_id:      id,
+        ticket_summary: summary,
+        comments,
+        action,
+      }).then(r => r.data),
+    onSuccess: (data, { action }) => {
+      setAiResult(data.result);
+      setAiAction(action);
     },
   });
 
@@ -280,6 +300,15 @@ export default function TicketDetailPage() {
             <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
             <p className="text-xs text-gray-400 mt-0.5">Opened {formatDate(ticket.createdAt)}</p>
           </div>
+          {isAdmin && !isTerminal(ticket.status) && (
+            <Link
+              to={`/admin/assign/${ticket.id}`}
+              className="shrink-0 px-3 py-1.5 text-xs rounded-lg border border-gray-300
+                         text-gray-600 hover:bg-gray-50 transition-colors font-medium"
+            >
+              {ticket.assignee ? 'Reassign' : 'Assign'}
+            </Link>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -422,23 +451,9 @@ export default function TicketDetailPage() {
             {/* Agent Actions */}
             {isAgent && !terminal && (
               <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    Agent Actions
-                  </h2>
-                  {/* AI Assist stub */}
-                  <button
-                    onClick={() => alert('AI Assist coming in Phase 2')}
-                    className="flex items-center gap-1 text-xs text-indigo-600 border border-indigo-200
-                               bg-indigo-50 rounded px-2 py-1 hover:bg-indigo-100 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    AI Assist
-                  </button>
-                </div>
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
+                  Agent Actions
+                </h2>
 
                 <div className="space-y-4">
                   {/* Move Status dropdown */}
@@ -543,7 +558,83 @@ export default function TicketDetailPage() {
                       Transition failed. This may not be an allowed state change.
                     </p>
                   )}
+
+                  {/* AI Assist */}
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                      <svg className="w-3 h-3 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      AI Assist
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([
+                        { action: 'summarise',        label: 'Summarise' },
+                        { action: 'draft_reply',      label: 'Draft Reply' },
+                        { action: 'suggest_fix',      label: 'Suggest Fix' },
+                        { action: 'draft_kb_article', label: 'Draft KB Article' },
+                      ] as const).map(({ action, label }) => {
+                        const isThis = agentAssistMutation.isPending &&
+                          agentAssistMutation.variables?.action === action;
+                        return (
+                          <button
+                            key={action}
+                            onClick={() => agentAssistMutation.mutate({
+                              action,
+                              summary:  `${ticket.subject}\n\n${ticket.description}`,
+                              comments: ticket.comments.map(c => c.body),
+                            })}
+                            disabled={agentAssistMutation.isPending}
+                            className="px-2 py-1.5 text-xs rounded-lg border border-indigo-200
+                                       bg-indigo-50 text-indigo-700 hover:bg-indigo-100
+                                       transition-colors disabled:opacity-40 font-medium text-left"
+                          >
+                            {isThis ? 'Working…' : label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {agentAssistMutation.isError && (
+                      <p className="text-xs text-red-600 mt-1">AI request failed. Is the AI service running?</p>
+                    )}
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* AI Assist Result */}
+            {aiResult && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                <div className="flex items-start justify-between mb-2 gap-2">
+                  <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
+                    {{
+                      summarise:        'AI Summary',
+                      draft_reply:      'Draft Reply',
+                      suggest_fix:      'Suggested Fix',
+                      draft_kb_article: 'KB Article Draft',
+                    }[aiAction ?? ''] ?? 'AI Result'}
+                  </p>
+                  <button
+                    onClick={() => setAiResult(null)}
+                    className="text-indigo-400 hover:text-indigo-600 shrink-0"
+                    aria-label="Dismiss"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                  {aiResult}
+                </p>
+                <button
+                  onClick={() => navigator.clipboard.writeText(aiResult)}
+                  className="mt-3 text-xs text-indigo-600 hover:underline font-medium"
+                >
+                  Copy to clipboard
+                </button>
               </div>
             )}
 

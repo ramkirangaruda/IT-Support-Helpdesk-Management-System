@@ -11,6 +11,7 @@ export class UsersController {
 
   @Get()
   findAll(@Query() query: ListUsersDto) {
-    return this.usersService.findAll(query.role);
+    const roles = query.roles ?? (query.role ? [query.role] : undefined);
+    return this.usersService.findAll(roles);
   }
 }

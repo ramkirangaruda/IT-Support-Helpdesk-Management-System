@@ -293,8 +293,8 @@ export default function AdminTicketQueuePage() {
   });
 
   const { data: agents = [] } = useQuery<Agent[]>({
-    queryKey: ['agents'],
-    queryFn: () => api.get<Agent[]>('/users', { params: { role: 'AGENT' } }).then(r => r.data),
+    queryKey: ['agents-and-l2'],
+    queryFn: () => api.get<Agent[]>('/users', { params: { roles: 'AGENT,L2_L3' } }).then(r => r.data),
     staleTime: Infinity,
   });
 
