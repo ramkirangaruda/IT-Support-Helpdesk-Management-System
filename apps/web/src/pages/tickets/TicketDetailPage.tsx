@@ -24,7 +24,7 @@ interface StatusHistoryEntry {
   toStatus: string;
   reason: string | null;
   createdAt: string;
-  actor: Actor;
+  actor: Actor | null;
 }
 
 interface Ticket {
@@ -596,7 +596,7 @@ export default function TicketDetailPage() {
                         <Badge label={entry.toStatus} styleMap={STATUS_STYLES} />
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        by {entry.actor.name} · {formatDate(entry.createdAt)}
+                        by {entry.actor?.name ?? 'System'} · {formatDate(entry.createdAt)}
                       </p>
                       {entry.reason && (
                         <p className="text-xs text-gray-400 mt-0.5 italic">"{entry.reason}"</p>
