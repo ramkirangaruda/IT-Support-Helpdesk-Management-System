@@ -39,7 +39,7 @@ npm run dev --workspace=apps/web
 # 7. (Optional) Start AI microservice
 cd apps/ai-service
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+python main.py
 ```
 
 ## Seed User Credentials
@@ -66,7 +66,7 @@ Three-tier monorepo: React 18 + TypeScript frontend (Vite) → NestJS REST API (
 |---------|-----|
 | Frontend | http://localhost:5173 |
 | API | http://localhost:3000 |
-| AI Microservice | http://localhost:8000 |
+| AI Microservice | http://localhost:8001 |
 | BullMQ Dashboard | http://localhost:3000/api/queues |
 | MinIO Console | http://localhost:9001 |
 

@@ -102,6 +102,7 @@ Pattern: validate ALL rows first; dry-run by default; only writes with `--commit
 ## Port convention (dev)
 - API runs on **:3007** — port 3000 is permanently occupied by a Qwikhire Vite server on this machine. Always start the API with `$env:PORT=3007 node dist/main.js` (or `PORT=3007 npm run start:dev`). Never kill PID on :3000.
 - Frontend Vite dev server runs on **:5173** (default).
+- AI service runs on **:8001** — port 8000 is permanently occupied by another process on this machine. Always start with `python main.py` (uses port 8001 via the `__main__` block) or `uvicorn main:app --port 8001`. Never suggest or revert to port 8000. `AI_SERVICE_URL` is permanently set to `http://localhost:8001` in `.env` and defaults to that in the adapter.
 - `apps/web/vite.config.ts` proxies `/api` → `http://localhost:3007`. If this ever reverts to :3000, the login form will show "Login failed" with no API errors — it's the proxy, not the API.
 - CORS in `main.ts` allows `FRONTEND_URL` (default `http://localhost:5173`) — no change needed.
 

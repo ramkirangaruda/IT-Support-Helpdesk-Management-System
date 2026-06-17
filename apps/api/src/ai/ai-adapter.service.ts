@@ -19,7 +19,7 @@ export class AiAdapterService {
   private readonly http: AxiosInstance;
 
   constructor(config: ConfigService) {
-    const baseURL = config.get<string>('AI_SERVICE_URL', 'http://localhost:8000');
+    const baseURL = config.get<string>('AI_SERVICE_URL', 'http://localhost:8001');
     this.http = axios.create({
       baseURL,
       timeout: 30_000,

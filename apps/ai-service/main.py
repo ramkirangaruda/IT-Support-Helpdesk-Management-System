@@ -18,7 +18,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, HTTPException
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from pydantic import BaseModel
 
 load_dotenv(find_dotenv(usecwd=False))
@@ -352,8 +352,6 @@ async def chat(req: ChatRequest) -> ChatResponse:
         if hist_msg.role == "user":
             messages.append(HumanMessage(content=hist_msg.content))
         else:
-            # assistant messages use AIMessage; HumanMessage with role prefix is a workaround-free way
-            from langchain.schema import AIMessage
             messages.append(AIMessage(content=hist_msg.content))
     messages.append(HumanMessage(content=req.message))
 
@@ -474,3 +472,8 @@ async def agent_assist(req: AgentAssistRequest) -> AgentAssistResponse:
         raise HTTPException(status_code=503, detail="LLM request failed") from exc
 
     return AgentAssistResponse(result=result, kb_sources=kb_refs)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)

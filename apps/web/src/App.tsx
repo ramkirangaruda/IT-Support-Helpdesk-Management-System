@@ -31,8 +31,7 @@ const FINANCE_ROLES  = ['FINANCE'];
 
 export default function App() {
   const { user } = useAuth();
-  // Chat drawer is shown only to EMPLOYEE role users
-  const isEmployee = user?.roles.includes('EMPLOYEE') ?? false;
+  const isAuthenticated = !!user;
 
   return (
     <>
@@ -194,7 +193,7 @@ export default function App() {
       </Routes>
 
       {/* Chat drawer — mounted outside Routes so state persists across navigation */}
-      {isEmployee && <ChatDrawer />}
+      {isAuthenticated && <ChatDrawer />}
     </>
   );
 }
