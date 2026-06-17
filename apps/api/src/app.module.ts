@@ -17,7 +17,6 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { NOTIFICATION_QUEUE } from './notifications/notifications.processor';
 import { PrismaModule } from './prisma/prisma.module';
 import { SlaModule } from './sla/sla.module';
 import { SLA_QUEUE_NAME } from './sla/sla.constants';
@@ -49,10 +48,6 @@ import { AdminModule } from './admin/admin.module';
     BullBoardModule.forRoot({
       route: '/queues',
       adapter: ExpressAdapter,
-    }),
-    BullBoardModule.forFeature({
-      name: NOTIFICATION_QUEUE,
-      adapter: BullMQAdapter,
     }),
     BullBoardModule.forFeature({
       name: SLA_QUEUE_NAME,

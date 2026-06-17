@@ -108,32 +108,11 @@ export class AuthService {
     });
 
     for (const admin of admins) {
-      await this.notifications.sendAdHoc(
-        admin.email,
-        admin.name,
-        'auth.registration_pending',
-        `[TicketZilla] New account pending approval: ${user.name}`,
-        `<p>A new user has registered and is awaiting your approval.</p>
-         <p><strong>Name:</strong> ${user.name}<br>
-         <strong>Email:</strong> ${user.email}<br>
-         <strong>Department:</strong> ${dto.department}</p>
-         <p>Log in as an IT Admin and visit <strong>Admin → Pending Users</strong> to approve or reject this request.</p>`,
-        `New account pending approval: ${user.name} (${user.email}), department: ${dto.department}. Log in and visit Admin > Pending Users to review.`,
-      );
+      await this.notifications.sendAdHoc(admin.email, 'auth.registration_pending');
     }
 
-    // Confirmation email to the registrant
-    await this.notifications.sendAdHoc(
-      user.email,
-      user.name,
-      'auth.registration_confirmation',
-      '[TicketZilla] Your account is pending approval',
-      `<p>Hi ${user.name},</p>
-       <p>Thank you for registering with TicketZilla. Your account is currently pending review by an IT administrator.</p>
-       <p>You will receive another email once your account has been approved and you can log in.</p>
-       <p>If you have questions, please contact your IT department directly.</p>`,
-      `Hi ${user.name}, your TicketZilla account is pending admin approval. You will be notified once approved.`,
-    );
+    // In-app confirmation for the registrant (they'll see it once approved and logged in)
+    await this.notifications.sendAdHoc(user.email, 'auth.registration_confirmation');
 
     this.logger.log(`New self-registration: ${user.email} (id=${user.id})`);
     return {

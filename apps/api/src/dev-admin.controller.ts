@@ -35,8 +35,8 @@ export class DevAdminController {
   }
 
   /**
-   * GET /api/admin/notifications?status=FAILED&limit=50
-   * Returns notifications filtered by status. Default status = FAILED.
+   * GET /api/admin/notifications?status=SENT&limit=100
+   * Returns notifications filtered by status. Default status = SENT.
    * Restricted to IT_ADMIN and SYS_ADMIN in all environments.
    */
   @Get('notifications')
@@ -45,7 +45,7 @@ export class DevAdminController {
     @Query('status') status?: string,
     @Query('limit')  limit?:  string,
   ) {
-    const ns  = (status?.toUpperCase() as NotificationStatus | undefined) ?? NotificationStatus.FAILED;
+    const ns  = (status?.toUpperCase() as NotificationStatus | undefined) ?? NotificationStatus.SENT;
     const lim = limit ? parseInt(limit, 10) : 100;
     return this.notificationsService.listByStatus(ns, lim);
   }

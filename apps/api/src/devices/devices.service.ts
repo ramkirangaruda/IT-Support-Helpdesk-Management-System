@@ -17,7 +17,6 @@ import { DecisionValue, DeviceDecisionDto } from './dto/decision.dto';
 import { ReturnDeviceDto } from './dto/return-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
 const DEVICE_INCLUDE = {
   allocations: {
@@ -381,14 +380,7 @@ export class DevicesService {
     });
 
     // Notify requester
-    await this.notifyDecision(
-      request.requester.email,
-      request.requester.name,
-      id,
-      request.deviceType,
-      dto.decision,
-      dto.comment,
-    );
+    await this.notifyDecision(request.requester.email, dto.decision);
 
     // Notify IT_ADMINs on approval so they can fulfil
     if (dto.decision === DecisionValue.APPROVED) {
@@ -400,7 +392,7 @@ export class DevicesService {
         select: { email: true, name: true },
       });
       for (const admin of admins) {
-        await this.notifyApprovedAdmin(admin.email, admin.name, id, request.deviceType, request.requester.name);
+        await this.notifyApprovedAdmin(admin.email);
       }
 
       // Trigger auto-create of PurchaseRequest if no AVAILABLE stock of this type
@@ -486,77 +478,18 @@ export class DevicesService {
     return allocation;
   }
 
-  // ── Email helpers ─────────────────────────────────────────────────────────
+  // ── Notification helpers ──────────────────────────────────────────────────
 
   private async notifyDecision(
-    toEmail:    string,
-    toName:     string,
-    requestId:  string,
-    deviceType: string,
-    decision:   DecisionValue,
-    comment?:   string,
+    toEmail:  string,
+    decision: DecisionValue,
   ) {
-    const approved  = decision === DecisionValue.APPROVED;
-    const color     = approved ? '#16a34a' : '#dc2626';
-    const title     = approved ? 'Device Request Approved' : 'Device Request Rejected';
-    const statusLine = approved
-      ? `<p>Our IT team will now arrange fulfilment. You will be contacted when the device is ready.</p>`
-      : `<p><strong>Reason:</strong> ${comment ?? 'No reason provided.'}</p>`;
-
-    const html = `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;
-            border:1px solid #e5e7eb;border-radius:8px;border-top:4px solid ${color}">
-  <h2 style="color:${color};margin-top:0">${title}</h2>
-  <p>Hi ${toName},</p>
-  <p>Your request for a <strong>${deviceType}</strong> has been <strong>${decision.toLowerCase()}</strong>.</p>
-  ${statusLine}
-  <p style="color:#6b7280;font-size:12px">Reference: ${requestId}</p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-  <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk — automated notification</p>
-</div>`;
-
-    const text = `${title}\n\nHi ${toName},\n\nYour request for a ${deviceType} has been ${decision.toLowerCase()}.\n${
-      approved ? 'Our IT team will arrange fulfilment.' : `Reason: ${comment ?? 'No reason provided.'}`
-    }\n\nReference: ${requestId}`;
-
     await this.notifications.sendAdHoc(
-      toEmail, toName, `device.request.${decision.toLowerCase()}`,
-      `[TicketZilla] Device Request ${approved ? 'Approved' : 'Rejected'}`,
-      html, text,
+      toEmail, `device.request.${decision.toLowerCase()}`,
     );
   }
 
-  private async notifyApprovedAdmin(
-    toEmail:       string,
-    toName:        string,
-    requestId:     string,
-    deviceType:    string,
-    requesterName: string,
-  ) {
-    const url = `${FRONTEND_URL}/device-requests`;
-    const html = `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;
-            border:1px solid #e5e7eb;border-radius:8px;border-top:4px solid #0369a1">
-  <h2 style="color:#0369a1;margin-top:0">Device Request Pending Fulfilment</h2>
-  <p>Hi ${toName},</p>
-  <p>A device request has been approved and is awaiting allocation.</p>
-  <blockquote style="border-left:4px solid #e5e7eb;padding:8px 16px;background:#f9fafb;margin:12px 0">
-    <strong>Type:</strong> ${deviceType}<br/>
-    <strong>Requester:</strong> ${requesterName}<br/>
-    <strong>Reference:</strong> ${requestId}
-  </blockquote>
-  <p><a href="${url}" style="display:inline-block;padding:10px 20px;background:#1d4ed8;
-    color:#fff;border-radius:6px;text-decoration:none;font-weight:600">View Requests</a></p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-  <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk — automated notification</p>
-</div>`;
-
-    const text = `Device Request Pending Fulfilment\n\nHi ${toName},\n\nA ${deviceType} request from ${requesterName} is approved and awaiting device allocation.\nReference: ${requestId}\n${url}`;
-
-    await this.notifications.sendAdHoc(
-      toEmail, toName, 'device.request.pending_fulfilment',
-      '[TicketZilla] Device Request Pending Fulfilment',
-      html, text,
-    );
+  private async notifyApprovedAdmin(toEmail: string) {
+    await this.notifications.sendAdHoc(toEmail, 'device.request.pending_fulfilment');
   }
 }

@@ -30,7 +30,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default function AdminNotificationsPage() {
-  const [status, setStatus] = useState<StatusFilter>('FAILED');
+  const [status, setStatus] = useState<StatusFilter>('SENT');
 
   const { data = [], isLoading, refetch } = useQuery<NotificationRecord[]>({
     queryKey: ['admin-notifications', status],
@@ -47,7 +47,7 @@ export default function AdminNotificationsPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notification Log</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Email and in-app notification records · refreshes every 30 s
+            In-app notification records · refreshes every 30 s
           </p>
         </div>
         <div className="flex items-center gap-2">

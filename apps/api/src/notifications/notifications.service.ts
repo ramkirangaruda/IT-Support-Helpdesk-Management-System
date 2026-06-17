@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
 import { NotificationChannel, NotificationStatus, RoleName, UserStatus } from '@prisma/client';
-import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
-import { GmailAdapter } from './gmail.adapter';
-import { NOTIFICATION_QUEUE } from './notifications.processor';
-import { NotificationEvent, NotificationJob, RecipientRole } from './notification-job.interface';
+import { NotificationEvent, RecipientRole } from './notification-job.interface';
 
 interface Recipient {
   email: string;
@@ -20,41 +16,31 @@ interface EmitExtra {
   slaRemainingMinutes?: number;
 }
 
-// Ticket shape returned by the internal findTicket query
 type TicketRow = {
-  id:          string;
-  subject:     string;
-  status:      string;
-  requester:   { email: string; name: string | null };
-  assignee:    { email: string; name: string | null } | null;
+  id:        string;
+  subject:   string;
+  status:    string;
+  requester: { email: string; name: string | null };
+  assignee:  { email: string; name: string | null } | null;
 };
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(
-    @InjectQueue(NOTIFICATION_QUEUE) private readonly queue: Queue,
-    private readonly prisma: PrismaService,
-    private readonly gmail: GmailAdapter,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /**
-   * High-level entry point. Looks up the ticket, resolves recipients based on
-   * event type, persists one Notification record per recipient, and enqueues
-   * one BullMQ job per recipient.
-   */
   async emit(event: NotificationEvent, ticketId: string, extra?: EmitExtra): Promise<void> {
     let ticket: TicketRow | null;
     try {
       ticket = await this.prisma.ticket.findUnique({
-        where:   { id: ticketId },
+        where:  { id: ticketId },
         select: {
-          id:       true,
-          subject:  true,
-          status:   true,
+          id:        true,
+          subject:   true,
+          status:    true,
           requester: { select: { email: true, name: true } },
           assignee:  { select: { email: true, name: true } },
         },
@@ -72,12 +58,47 @@ export class NotificationsService {
     const recipients = await this.resolveRecipients(event, ticket, extra?.actorEmail);
 
     if (recipients.length === 0) {
-      this.logger.debug(`emit(${event}, ${ticketId}): no recipients resolved — nothing enqueued`);
+      this.logger.debug(`emit(${event}, ${ticketId}): no recipients — skipping`);
       return;
     }
 
     for (const recipient of recipients) {
-      await this.persistAndEnqueue(event, ticket, recipient, extra);
+      try {
+        await this.prisma.notification.create({
+          data: {
+            ticketId:       ticket.id,
+            recipientEmail: recipient.email,
+            channel:        NotificationChannel.IN_APP,
+            event,
+            status:         NotificationStatus.SENT,
+            sentAt:         new Date(),
+          },
+        });
+        this.logger.log(`Notification(${event}) → ${recipient.email}`);
+      } catch (err) {
+        this.logger.error(
+          `Failed to persist Notification(${event}, ${recipient.email}): ${(err as Error).message}`,
+        );
+      }
+    }
+  }
+
+  // Ad-hoc notification for non-ticket events (user approvals, device decisions, etc.)
+  async sendAdHoc(to: string, event: string): Promise<void> {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          ticketId:       null,
+          recipientEmail: to,
+          channel:        NotificationChannel.IN_APP,
+          event,
+          status:         NotificationStatus.SENT,
+          sentAt:         new Date(),
+        },
+      });
+      this.logger.log(`Notification(${event}) → ${to}`);
+    } catch (err) {
+      this.logger.error(`sendAdHoc(${event} → ${to}): ${(err as Error).message}`);
     }
   }
 
@@ -101,56 +122,40 @@ export class NotificationsService {
 
     switch (event) {
       case 'ticket.created':
-        // Employee confirmation + IT_ADMIN new-ticket alert
         candidates = [requester, ...(await this.getUsersByRole(RoleName.IT_ADMIN, 'admin'))];
         break;
-
       case 'ticket.assigned':
-        // Agent assignment notification
         candidates = assignee ? [assignee] : [];
         break;
-
       case 'ticket.status_changed':
-        // Employee status update
         candidates = [requester];
         break;
-
       case 'ticket.comment_added':
-        // Employee comment notification
         candidates = [requester];
         break;
-
       case 'ticket.sla_warning':
-        // Assigned agent only
         candidates = assignee ? [assignee] : [];
         break;
-
       case 'ticket.escalated':
-        // IT_ADMINs + MANAGERs
         candidates = [
           ...(await this.getUsersByRole(RoleName.IT_ADMIN, 'admin')),
           ...(await this.getUsersByRole(RoleName.MANAGER, 'manager')),
         ];
         break;
-
       case 'ticket.resolved':
         candidates = [requester];
         break;
-
       case 'ticket.closed':
         candidates = [requester];
         break;
-
       case 'ticket.reopened':
-        // Agent reopen alert
         candidates = assignee ? [assignee] : [];
         break;
-
       default:
         candidates = [];
     }
 
-    // Deduplicate by email and exclude the actor (avoid notifying someone about their own action)
+    // Deduplicate by email and exclude the actor
     const seen = new Set<string>(actorEmail ? [actorEmail] : []);
     const unique: Recipient[] = [];
     for (const r of candidates) {
@@ -173,122 +178,23 @@ export class NotificationsService {
     return users.map(u => ({ email: u.email, name: u.name, role: recipientRole }));
   }
 
-  // ── Ad-hoc email (non-ticket, e.g. device decisions) ─────────────────────
-
-  async sendAdHoc(
-    to:       string,
-    toName:   string,
-    event:    string,
-    subject:  string,
-    html:     string,
-    text:     string,
-    cc?:      string[],
-  ): Promise<void> {
-    let notificationId: string | null = null;
-    try {
-      const record = await this.prisma.notification.create({
-        data: {
-          ticketId:       null,
-          recipientEmail: to,
-          channel:        NotificationChannel.EMAIL,
-          event,
-          status:         NotificationStatus.PENDING,
-        },
-        select: { id: true },
-      });
-      notificationId = record.id;
-    } catch (err) {
-      this.logger.error(`sendAdHoc: failed to persist notification → ${to}: ${(err as Error).message}`);
-    }
-
-    try {
-      await this.gmail.send(to, subject, html, text, cc);
-      if (notificationId) {
-        await this.prisma.notification.update({
-          where: { id: notificationId },
-          data:  { status: NotificationStatus.SENT, sentAt: new Date() },
-        });
-      }
-    } catch (err) {
-      this.logger.error(`sendAdHoc: email failed → ${to} | ${event}: ${(err as Error).message}`);
-      if (notificationId) {
-        await this.prisma.notification.update({
-          where: { id: notificationId },
-          data:  { status: NotificationStatus.FAILED },
-        }).catch(() => undefined);
-      }
-    }
-  }
-
-  // ── Persistence + enqueue ─────────────────────────────────────────────────
-
-  private async persistAndEnqueue(
-    event:     NotificationEvent,
-    ticket:    TicketRow,
-    recipient: Recipient,
-    extra?:    EmitExtra,
-  ): Promise<void> {
-    let notificationId: string;
-    try {
-      const record = await this.prisma.notification.create({
-        data: {
-          ticketId:       ticket.id,
-          recipientEmail: recipient.email,
-          channel:        NotificationChannel.EMAIL,
-          event,
-          status:         NotificationStatus.PENDING,
-        },
-        select: { id: true },
-      });
-      notificationId = record.id;
-    } catch (err) {
-      this.logger.error(
-        `Failed to persist Notification(${event}, ${recipient.email}): ${(err as Error).message}`,
-      );
-      return;
-    }
-
-    const job: NotificationJob = {
-      notificationId,
-      event,
-      ticketId:       ticket.id,
-      ticketSubject:  ticket.subject,
-      ticketStatus:   ticket.status,
-      recipientEmail: recipient.email,
-      recipientName:  recipient.name,
-      recipientRole:  recipient.role,
-      requesterName:  ticket.requester.name ?? 'User',
-      assigneeName:   ticket.assignee?.name ?? null,
-      actorName:      extra?.actorName,
-      commentBody:    extra?.commentBody,
-      slaRemainingMinutes: extra?.slaRemainingMinutes,
-    };
-
-    try {
-      await this.queue.add(event, job, {
-        attempts:         3,
-        backoff:          { type: 'exponential', delay: 5_000 },
-        removeOnComplete: 100,
-        removeOnFail:     500,
-      });
-    } catch (err) {
-      // Enqueue failure: leave Notification as PENDING (a future cleanup job can retry)
-      this.logger.error(
-        `Failed to enqueue ${event} for ${recipient.email}: ${(err as Error).message}`,
-      );
-    }
-  }
-
-  // ── Admin helpers ─────────────────────────────────────────────────────────
+  // ── Query helpers ─────────────────────────────────────────────────────────
 
   async listByStatus(status: NotificationStatus, limit = 100) {
     return this.prisma.notification.findMany({
       where:   { status },
-      include: {
-        ticket: { select: { id: true, subject: true } },
-      },
+      include: { ticket: { select: { id: true, subject: true } } },
       orderBy: { createdAt: 'desc' },
       take:    Math.min(limit, 500),
+    });
+  }
+
+  async listForUser(email: string, limit = 15) {
+    return this.prisma.notification.findMany({
+      where:   { recipientEmail: email, status: NotificationStatus.SENT },
+      include: { ticket: { select: { id: true, subject: true } } },
+      orderBy: { createdAt: 'desc' },
+      take:    Math.min(limit, 50),
     });
   }
 }

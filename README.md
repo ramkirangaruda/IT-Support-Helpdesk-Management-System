@@ -20,7 +20,7 @@ npm install
 
 # 2. Configure environment
 cp .env.example apps/api/.env
-# Edit apps/api/.env and fill in JWT_SECRET, Gmail OAuth, and LLM credentials
+# Edit apps/api/.env and fill in JWT_SECRET and LLM credentials
 
 # 3. Start infrastructure
 docker-compose up -d postgres redis minio
@@ -73,7 +73,7 @@ Three-tier monorepo: React 18 + TypeScript frontend (Vite) → NestJS REST API (
 ## Production Deployment
 
 1. Set `NODE_ENV=production` — disables `/api/auth/dev-login` and dev-admin endpoints
-2. Set `JWT_SECRET`, `GMAIL_*`, `LLM_API_KEY`, `FRONTEND_URL`, `OIDC_*` in environment
+2. Set `JWT_SECRET`, `LLM_API_KEY`, `FRONTEND_URL`, `OIDC_*` in environment
 3. `npm run build --workspace=apps/api && node apps/api/dist/main.js`
 4. `npm run build --workspace=apps/web` — serve `dist/` with nginx or CloudFront
 5. Wire OIDC: `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`

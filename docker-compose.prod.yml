@@ -9,8 +9,7 @@
 #
 # Usage:
 #   export POSTGRES_PASSWORD=... JWT_SECRET=... REDIS_PASSWORD=... LLM_API_KEY=... \
-#          GMAIL_CLIENT_ID=... GMAIL_CLIENT_SECRET=... GMAIL_REFRESH_TOKEN=... \
-#          GMAIL_USER=... FRONTEND_URL=https://help.gov.example
+#          FRONTEND_URL=https://help.gov.example
 #   docker compose -f docker-compose.prod.yml up -d
 #   docker compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
 #
@@ -91,10 +90,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:?set a strong JWT_SECRET}
       - AI_SERVICE_URL=http://ai-service:8001
       - FRONTEND_URL=${FRONTEND_URL:?set FRONTEND_URL}
-      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
-      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
-      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
-      - GMAIL_USER=${GMAIL_USER}
     ports:
       - "127.0.0.1:3000:3000"   # loopback only — front with a host TLS reverse proxy
     depends_on:

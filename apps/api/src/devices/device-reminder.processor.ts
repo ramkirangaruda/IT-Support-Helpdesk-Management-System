@@ -6,8 +6,6 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEVICE_QUEUE_NAME, DeviceJobType } from './device-reminder.constants';
 
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-
 @Processor(DEVICE_QUEUE_NAME)
 @Injectable()
 export class DeviceReminderProcessor extends WorkerHost {
@@ -116,7 +114,7 @@ export class DeviceReminderProcessor extends WorkerHost {
         ? [...adminEmails, ...managerEmails].filter(e => e !== employee.email)
         : adminEmails.filter(e => e !== employee.email);
 
-      await this.sendReminderEmail(employee, holdCount, nextCycle, cc);
+      await this.sendReminderNotification(employee, nextCycle, cc);
       reminded++;
 
       this.logger.log(
@@ -127,84 +125,15 @@ export class DeviceReminderProcessor extends WorkerHost {
     this.logger.log(`CHECK_DEVICE_LIMITS: ${reminded} reminder(s) sent, ${resolved} resolved`);
   }
 
-  private async sendReminderEmail(
-    employee:  { id: string; name: string; email: string },
-    holdCount: number,
-    cycle:     number,
-    cc:        string[],
+  private async sendReminderNotification(
+    employee: { id: string; name: string; email: string },
+    cycle:    number,
+    cc:       string[],
   ): Promise<void> {
-    const subject = `[TicketZilla] Please return a device — you currently hold ${holdCount}`;
-    const portalUrl = `${FRONTEND_URL}/tickets`;
-
-    let bodyHtml: string;
-    let bodyText: string;
-
-    if (cycle === 1) {
-      // ── Polite nudge ────────────────────────────────────────────────────────
-      bodyHtml = `
-        <p>Hi ${employee.name},</p>
-        <p>Our records show you currently have <strong>${holdCount} device(s)</strong> checked out.
-           Our standard policy allows a maximum of <strong>2 devices</strong> per employee.</p>
-        <p>When you have a moment, please return any devices you no longer need by raising a ticket
-           through the IT Help Desk portal.</p>
-        <p>If you believe this is in error, please contact the IT team.</p>`;
-      bodyText = `Hi ${employee.name},\n\nOur records show you currently hold ${holdCount} device(s). The maximum is 2 per employee.\n\nPlease return any devices you no longer need via the IT Help Desk portal.\n\nIf you believe this is in error, please contact the IT team.`;
-    } else if (cycle === 2) {
-      // ── Firmer reminder ─────────────────────────────────────────────────────
-      bodyHtml = `
-        <p>Hi ${employee.name},</p>
-        <p>This is a follow-up to our previous reminder. You still have
-           <strong>${holdCount} device(s)</strong> checked out, which exceeds the limit of
-           <strong>2 devices</strong> per employee per the
-           <strong>IT Asset Management Policy (Section 6.2)</strong>.</p>
-        <p>Please arrange to return the excess device(s) at your earliest convenience.
-           You can do so by raising a request through the IT Help Desk portal, or by
-           contacting the IT team directly.</p>
-        <p>Continued non-compliance may result in escalation to your manager.</p>`;
-      bodyText = `Hi ${employee.name},\n\nThis is a follow-up reminder. You still hold ${holdCount} device(s), exceeding the limit of 2 per the IT Asset Management Policy (Section 6.2).\n\nPlease arrange to return the excess device(s) via the IT Help Desk portal.\n\nContinued non-compliance may result in escalation to your manager.`;
-    } else {
-      // ── Escalation (cycle 3+) ────────────────────────────────────────────
-      bodyHtml = `
-        <p>Hi ${employee.name},</p>
-        <p>Despite previous reminders, you still have <strong>${holdCount} device(s)</strong>
-           checked out, exceeding the allowable limit of <strong>2 devices</strong> per employee.
-           This is reminder <strong>#${cycle}</strong>.</p>
-        <p>This matter has been escalated to your manager and the IT Administration team.
-           Please return the excess device(s) <strong>immediately</strong> or contact IT to
-           discuss extenuating circumstances.</p>
-        <p>Failure to act may result in formal proceedings under the
-           IT Asset Management Policy.</p>`;
-      bodyText = `Hi ${employee.name},\n\nDespite previous reminders, you still hold ${holdCount} device(s) (limit: 2). This is reminder #${cycle}.\n\nThis matter has been escalated to your manager and IT Admin. Please return the excess device(s) immediately or contact IT.`;
+    await this.notifications.sendAdHoc(employee.email, `device.reminder.cycle${cycle}`);
+    // Notify CC recipients (admins, managers on cycle 3+) as separate in-app alerts
+    for (const email of cc) {
+      await this.notifications.sendAdHoc(email, `device.reminder.escalation_cycle${cycle}`);
     }
-
-    const accentColor = cycle === 1 ? '#0369a1' : cycle === 2 ? '#d97706' : '#dc2626';
-    const title = cycle === 1
-      ? 'Device Return Reminder'
-      : cycle === 2
-      ? 'Device Return Reminder — Action Required'
-      : `Device Return Reminder — Escalation (Notice #${cycle})`;
-
-    const html = `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;
-            border:1px solid #e5e7eb;border-radius:8px;border-top:4px solid ${accentColor}">
-  <h2 style="color:${accentColor};margin-top:0">${title}</h2>
-  ${bodyHtml}
-  <p><a href="${portalUrl}"
-    style="display:inline-block;padding:10px 20px;background:#1d4ed8;
-           color:#fff;border-radius:6px;text-decoration:none;font-weight:600"
-  >Open IT Help Desk Portal</a></p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-  <p style="color:#6b7280;font-size:12px">TicketZilla IT Help Desk — automated device management notification</p>
-</div>`;
-
-    await this.notifications.sendAdHoc(
-      employee.email,
-      employee.name,
-      `device.reminder.cycle${cycle}`,
-      subject,
-      html,
-      bodyText,
-      cc,
-    );
   }
 }

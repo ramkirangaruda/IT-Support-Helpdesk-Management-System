@@ -10,7 +10,7 @@ Always begin every response with "Ramkiran," before saying anything else.
 - DB: PostgreSQL via Prisma ORM
 - Cache/Queue: Redis + BullMQ
 - Auth: JWT (cookie + bearer) with OIDC in production; mock dev-login in dev
-- Email: Gmail API (OAuth 2.0)
+- Notifications: **in-app only** (Notification model + admin log + sidebar bell) — Gmail/email integration fully removed per product decision (2026-06-17). Do NOT reintroduce email/Gmail code unless explicitly asked.
 - Object storage: local MinIO in dev, S3-compatible in prod
 
 ## Architecture
@@ -204,6 +204,7 @@ Navigation is a **collapsible left sidebar** (not a top nav bar). There is no to
 1. Copy `.env.example` → `.env` and fill in all secrets
    - JWT_SECRET: `openssl rand -base64 32`
    - OIDC_*: set OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL for production SSO
+   - No Gmail/email env vars required — notifications are in-app only
 2. docker-compose up -d postgres redis ai-service minio
 3. cd apps/api && npx prisma db push  (or migrate deploy if using migrations)
 4. npm run build --workspace=apps/api && node apps/api/dist/main.js

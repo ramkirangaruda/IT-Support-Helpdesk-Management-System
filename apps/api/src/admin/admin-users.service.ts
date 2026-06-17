@@ -89,16 +89,7 @@ export class AdminUsersService {
       },
     });
 
-    await this.notifications.sendAdHoc(
-      target.email,
-      target.name,
-      'auth.account_approved',
-      '[TicketZilla] Your account has been approved',
-      `<p>Hi ${target.name},</p>
-       <p>Great news! Your TicketZilla account has been approved. You can now log in with your email and password.</p>
-       <p>Your assigned role(s): <strong>${dto.roles.join(', ')}</strong></p>`,
-      `Hi ${target.name}, your TicketZilla account has been approved. You can now log in with your email and password. Roles: ${dto.roles.join(', ')}.`,
-    );
+    await this.notifications.sendAdHoc(target.email, 'auth.account_approved');
 
     return { message: `User ${target.email} approved with roles: ${dto.roles.join(', ')}` };
   }
@@ -132,17 +123,7 @@ export class AdminUsersService {
       after: { accountStatus: AccountStatus.REJECTED, reason: dto.reason },
     });
 
-    await this.notifications.sendAdHoc(
-      target.email,
-      target.name,
-      'auth.account_rejected',
-      '[TicketZilla] Your account registration was not approved',
-      `<p>Hi ${target.name},</p>
-       <p>Unfortunately, your TicketZilla account registration has not been approved at this time.</p>
-       <p><strong>Reason:</strong> ${dto.reason}</p>
-       <p>If you believe this is a mistake, please contact your IT department.</p>`,
-      `Hi ${target.name}, your TicketZilla account registration was not approved. Reason: ${dto.reason}. Contact IT if you think this is a mistake.`,
-    );
+    await this.notifications.sendAdHoc(target.email, 'auth.account_rejected');
 
     return { message: `User ${target.email} rejected` };
   }

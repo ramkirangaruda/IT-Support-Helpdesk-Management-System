@@ -25,7 +25,6 @@ import { RecordReceiptDto } from './dto/record-receipt.dto';
 import { UpdatePurchaseRequestDto } from './dto/update-purchase-request.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
 const PR_INCLUDE = {
   raisedBy:      { select: { id: true, name: true, email: true } },
@@ -510,168 +509,53 @@ export class ProcurementService {
     }
   }
 
-  // ── Email helpers ─────────────────────────────────────────────────────────
+  // ── Notification helpers ──────────────────────────────────────────────────
 
   private async notifyManagers(prId: string, itemSpec: string, raisedByName: string) {
+    void prId; void itemSpec; void raisedByName;
     const managers = await this.prisma.user.findMany({
-      where: {
-        userRoles: { some: { role: { name: RoleName.MANAGER } } },
-        status:    UserStatus.ACTIVE,
-      },
-      select: { email: true, name: true },
+      where:  { userRoles: { some: { role: { name: RoleName.MANAGER } } }, status: UserStatus.ACTIVE },
+      select: { email: true },
     });
-    const url = `${FRONTEND_URL}/admin/purchase-requests`;
     for (const m of managers) {
-      const html = this.buildEmail({
-        color:  '#d97706',
-        title:  'Purchase Request Awaiting Your Approval',
-        body:   `<p>Hi ${m.name},</p>
-                 <p>A new purchase request requires your approval.</p>
-                 ${this.prBlock(prId, itemSpec, raisedByName)}
-                 ${this.actionButton(url, 'Review Request')}`,
-      });
-      await this.notifications.sendAdHoc(
-        m.email, m.name,
-        'purchase.request.pending_manager',
-        '[TicketZilla] Purchase Request Needs Your Approval',
-        html, `Purchase request ${prId} (${itemSpec}) needs your approval.\n${url}`,
-      );
+      await this.notifications.sendAdHoc(m.email, 'purchase.request.pending_manager');
     }
   }
 
   private async notifyFinance(prId: string, itemSpec: string, raisedByName: string) {
+    void prId; void itemSpec; void raisedByName;
     const team = await this.prisma.user.findMany({
-      where: {
-        userRoles: { some: { role: { name: RoleName.FINANCE } } },
-        status:    UserStatus.ACTIVE,
-      },
-      select: { email: true, name: true },
+      where:  { userRoles: { some: { role: { name: RoleName.FINANCE } } }, status: UserStatus.ACTIVE },
+      select: { email: true },
     });
-    const url = `${FRONTEND_URL}/finance/purchase-requests`;
     for (const f of team) {
-      const html = this.buildEmail({
-        color:  '#0369a1',
-        title:  'Purchase Request Awaiting Finance Approval',
-        body:   `<p>Hi ${f.name},</p>
-                 <p>A purchase request has been approved by management and needs finance sign-off.</p>
-                 ${this.prBlock(prId, itemSpec, raisedByName)}
-                 ${this.actionButton(url, 'Review Request')}`,
-      });
-      await this.notifications.sendAdHoc(
-        f.email, f.name,
-        'purchase.request.pending_finance',
-        '[TicketZilla] Purchase Request Needs Finance Approval',
-        html, `Purchase request ${prId} (${itemSpec}) needs finance approval.\n${url}`,
-      );
+      await this.notifications.sendAdHoc(f.email, 'purchase.request.pending_finance');
     }
   }
 
   private async notifyAdminsFinanceApproved(prId: string, itemSpec: string) {
+    void prId; void itemSpec;
     const admins = await this.prisma.user.findMany({
-      where: {
-        userRoles: { some: { role: { name: RoleName.IT_ADMIN } } },
-        status:    UserStatus.ACTIVE,
-      },
-      select: { email: true, name: true },
+      where:  { userRoles: { some: { role: { name: RoleName.IT_ADMIN } } }, status: UserStatus.ACTIVE },
+      select: { email: true },
     });
-    const url = `${FRONTEND_URL}/admin/purchase-requests`;
     for (const a of admins) {
-      const html = this.buildEmail({
-        color:  '#16a34a',
-        title:  'Purchase Request Finance-Approved — Raise PO',
-        body:   `<p>Hi ${a.name},</p>
-                 <p>Finance has approved the following request. Please raise a PO.</p>
-                 ${this.prBlock(prId, itemSpec)}
-                 ${this.actionButton(url, 'Raise PO')}`,
-      });
-      await this.notifications.sendAdHoc(
-        a.email, a.name,
-        'purchase.request.finance_approved',
-        '[TicketZilla] Purchase Request Finance-Approved — Please Raise PO',
-        html, `Finance approved PR ${prId} (${itemSpec}). Please raise the PO.\n${url}`,
-      );
+      await this.notifications.sendAdHoc(a.email, 'purchase.request.finance_approved');
     }
   }
 
-  private async notifyRequesterRejected(
-    toEmail: string, toName: string, prId: string, itemSpec: string, comment?: string,
-  ) {
-    const html = this.buildEmail({
-      color: '#dc2626',
-      title: 'Purchase Request Rejected',
-      body:  `<p>Hi ${toName},</p>
-              <p>Your purchase request for <strong>${itemSpec}</strong> has been rejected.</p>
-              ${comment ? `<p><strong>Reason:</strong> ${comment}</p>` : ''}
-              <p style="color:#6b7280;font-size:12px">Reference: ${prId}</p>`,
-    });
-    await this.notifications.sendAdHoc(
-      toEmail, toName, 'purchase.request.rejected',
-      '[TicketZilla] Purchase Request Rejected',
-      html, `Your PR ${prId} (${itemSpec}) was rejected.${comment ? ` Reason: ${comment}` : ''}`,
-    );
+  private async notifyRequesterRejected(toEmail: string, toName: string, prId: string, itemSpec: string, comment?: string) {
+    void toName; void prId; void itemSpec; void comment;
+    await this.notifications.sendAdHoc(toEmail, 'purchase.request.rejected');
   }
 
   private async notifyDeviceAvailable(toEmail: string, toName: string, deviceType: string) {
-    const html = this.buildEmail({
-      color: '#16a34a',
-      title: 'Your Device Is Now Available',
-      body:  `<p>Hi ${toName},</p>
-              <p>The <strong>${deviceType}</strong> you requested has been purchased and is now available.</p>
-              <p>Our IT team will contact you shortly to arrange allocation.</p>`,
-    });
-    await this.notifications.sendAdHoc(
-      toEmail, toName, 'device.purchased_available',
-      '[TicketZilla] Your Requested Device Is Now Available',
-      html, `Hi ${toName}, your requested ${deviceType} has arrived and is available for allocation.`,
-    );
+    void toName; void deviceType;
+    await this.notifications.sendAdHoc(toEmail, 'device.purchased_available');
   }
 
-  private async notifyAutoCreatedPr(
-    toEmail: string, toName: string, prId: string, deviceType: string,
-  ) {
-    const url = `${FRONTEND_URL}/admin/purchase-requests`;
-    const html = this.buildEmail({
-      color: '#7c3aed',
-      title: 'Auto-Created Purchase Request Needs Review',
-      body:  `<p>Hi ${toName},</p>
-              <p>A purchase request was automatically created because no <strong>${deviceType}</strong> is
-              available in stock to fulfil an approved device request.</p>
-              ${this.prBlock(prId, deviceType)}
-              <p>Please review, update the cost and budget code, then submit for approval.</p>
-              ${this.actionButton(url, 'View Purchase Requests')}`,
-    });
-    await this.notifications.sendAdHoc(
-      toEmail, toName, 'purchase.request.auto_created',
-      `[TicketZilla] Auto-Created PR for ${deviceType} Needs Review`,
-      html, `Auto-created PR ${prId} for ${deviceType} needs review.\n${url}`,
-    );
-  }
-
-  // ── HTML helpers ──────────────────────────────────────────────────────────
-
-  private buildEmail({ color, title, body }: { color: string; title: string; body: string }) {
-    return `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;
-            border:1px solid #e5e7eb;border-radius:8px;border-top:4px solid ${color}">
-  <h2 style="color:${color};margin-top:0">${title}</h2>
-  ${body}
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-  <p style="color:#6b7280;font-size:12px">TicketZilla — automated notification</p>
-</div>`;
-  }
-
-  private prBlock(prId: string, itemSpec: string, raisedByName?: string) {
-    return `
-<blockquote style="border-left:4px solid #e5e7eb;padding:8px 16px;background:#f9fafb;margin:12px 0">
-  <strong>Reference:</strong> ${prId}<br/>
-  <strong>Item:</strong> ${itemSpec}
-  ${raisedByName ? `<br/><strong>Raised by:</strong> ${raisedByName}` : ''}
-</blockquote>`;
-  }
-
-  private actionButton(url: string, label: string) {
-    return `<p><a href="${url}" style="display:inline-block;padding:10px 20px;
-      background:#1d4ed8;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
-      ${label}</a></p>`;
+  private async notifyAutoCreatedPr(toEmail: string, toName: string, prId: string, deviceType: string) {
+    void toName; void prId; void deviceType;
+    await this.notifications.sendAdHoc(toEmail, 'purchase.request.auto_created');
   }
 }
