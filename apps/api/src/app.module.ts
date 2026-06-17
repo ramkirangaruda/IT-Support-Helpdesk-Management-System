@@ -31,6 +31,7 @@ import { ReportsModule } from './reports/reports.module';
 import { DevicesModule } from './devices/devices.module';
 import { DEVICE_QUEUE_NAME } from './devices/device-reminder.constants';
 import { ProcurementModule } from './procurement/procurement.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { ProcurementModule } from './procurement/procurement.module';
     ReportsModule,
     DevicesModule,
     ProcurementModule,
+    AdminModule,
   ],
   controllers: [AppController, DevAdminController],
   providers: [

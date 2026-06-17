@@ -106,11 +106,53 @@ Pattern: validate ALL rows first; dry-run by default; only writes with `--commit
 - `apps/web/vite.config.ts` proxies `/api` → `http://localhost:3007`. If this ever reverts to :3000, the login form will show "Login failed" with no API errors — it's the proxy, not the API.
 - CORS in `main.ts` allows `FRONTEND_URL` (default `http://localhost:5173`) — no change needed.
 
+## Email/password auth (2026-06-17)
+Real credentials-based auth is now in place alongside dev-login and OIDC.
+
+**Self-registration flow:**
+- POST /api/auth/register — public, rate-limited to 5/hour per IP
+  - Input: { name, email, password (min 10 chars, must contain letter+number), department }
+  - Creates user with accountStatus=PENDING_APPROVAL, no roles
+  - Emails IT_ADMIN users + sends confirmation to registrant
+  - Returns generic success — no token issued
+- New users CANNOT log in until an IT_ADMIN approves them
+- Schema fields added to User: passwordHash (String?, bcrypt 12 rounds), accountStatus (AccountStatus enum), approvedById, approvedAt
+- ssoSubject is now nullable — self-registered users have ssoSubject=null
+
+**Login:**
+- POST /api/auth/login — public
+  - Input: { email, password }
+  - Generic "Invalid email or password" for both "no such user" and "wrong password" (no enumeration)
+  - Specific messages only for accountStatus checks (pending/rejected/suspended — intentional per spec)
+  - Per-email lockout: 5 failed attempts in 15 min → locked with time-remaining message
+  - Login failures ≥3 for same email logged to Notification table (visible via GET /admin/notifications?status=FAILED)
+  - Issues same JWT shape as dev-login and OIDC (sub, email, roles[], 8h expiry)
+
+**Admin approval:**
+- GET /api/admin/pending-users — IT_ADMIN/SYS_ADMIN only; returns all PENDING_APPROVAL users
+- POST /api/admin/pending-users/:id/approve — body: { roles: string[] }; activates account, assigns roles, emails user
+- POST /api/admin/pending-users/:id/reject — body: { reason: string }; rejects account, emails user with reason
+- All approval/rejection actions written to AuditLog
+
+**JWT strategy:** validates accountStatus=ACTIVE in addition to status=ACTIVE — so any token issued to a user who is later suspended/rejected stops working immediately.
+
+**Frontend:**
+- /login — shows dev-login dropdown when MODE≠production; shows real email/password form in production
+- /register — self-registration form with client-side validation matching backend rules; on success shows "pending" message (no auto-redirect)
+- /admin/pending-users — IT_ADMIN/SYS_ADMIN only; table of pending users with Approve/Reject modals; nav link added
+
+**Passwords are NEVER:**
+- Returned in any API response (all user queries use explicit select without passwordHash)
+- Logged anywhere (AuditLog before/after fields explicitly exclude passwordHash)
+
 ## Admin endpoints (all environments, IT_ADMIN/SYS_ADMIN only)
-- GET /api/admin/notifications?status=FAILED&limit=100 — view failed notification records
+- GET /api/admin/notifications?status=FAILED&limit=100 — view failed notification records + repeated login failures
+- GET /api/admin/pending-users — list accounts pending approval
+- POST /api/admin/pending-users/:id/approve — approve with role assignment
+- POST /api/admin/pending-users/:id/reject — reject with reason
 
 ## Dev-only endpoints (NODE_ENV ≠ production)
-- POST /api/auth/dev-login — get a JWT for any test user
+- POST /api/auth/dev-login — get a JWT for any test user (hard-blocked in production)
 - POST /api/admin/trigger-escalation-check — manually fire SLA escalation check
 - POST /api/admin/trigger-device-reminder-check — manually fire device limit check
 

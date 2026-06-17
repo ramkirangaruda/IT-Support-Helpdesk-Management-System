@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
-import { UserStatus } from '@prisma/client';
+import { AccountStatus, UserStatus } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -33,7 +33,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       include: { userRoles: { include: { role: true } } },
     });
 
-    if (!user || user.status !== UserStatus.ACTIVE) {
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      user.accountStatus !== AccountStatus.ACTIVE
+    ) {
       throw new UnauthorizedException('User not found or inactive');
     }
 

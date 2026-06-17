@@ -1,4 +1,4 @@
-import { PrismaClient, Priority, RoleName } from '@prisma/client';
+import { AccountStatus, PrismaClient, Priority, RoleName } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -146,12 +146,13 @@ async function seedUsers(roleMap: Record<RoleName, string>): Promise<void> {
   for (const u of USERS) {
     const user = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, department: u.department },
+      update: { name: u.name, department: u.department, accountStatus: AccountStatus.ACTIVE },
       create: {
         email: u.email,
         name: u.name,
         department: u.department,
         ssoSubject: `dev|${u.email}`,
+        accountStatus: AccountStatus.ACTIVE,
       },
     });
 

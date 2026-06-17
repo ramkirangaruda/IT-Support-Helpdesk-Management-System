@@ -3,6 +3,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ChatDrawer from './components/ChatDrawer';
 import { useAuth } from './auth/useAuth';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import AdminPendingUsersPage from './pages/admin/AdminPendingUsersPage';
 import TicketListPage from './pages/tickets/TicketListPage';
 import NewTicketPage from './pages/tickets/NewTicketPage';
 import TicketDetailPage from './pages/tickets/TicketDetailPage';
@@ -38,6 +40,7 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
         {/* Any authenticated user */}
         <Route
@@ -51,6 +54,16 @@ export default function App() {
         <Route
           path="/tickets/:id"
           element={<ProtectedRoute><TicketDetailPage /></ProtectedRoute>}
+        />
+
+        {/* IT_ADMIN / SYS_ADMIN only — pending user approvals */}
+        <Route
+          path="/admin/pending-users"
+          element={
+            <ProtectedRoute roles={IT_ADMIN_ROLES}>
+              <AdminPendingUsersPage />
+            </ProtectedRoute>
+          }
         />
 
         {/* IT_ADMIN / SYS_ADMIN / MANAGER only */}

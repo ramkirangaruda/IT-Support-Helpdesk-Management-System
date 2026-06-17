@@ -8,11 +8,14 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { OidcService } from './oidc.service';
 import { Public } from './decorators/public.decorator';
 import { DevLoginDto } from './dto/dev-login.dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterUserDto } from './dto/register-user.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -20,6 +23,8 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly oidcService: OidcService,
   ) {}
+
+  // ── Dev-only ──────────────────────────────────────────────────────────────
 
   @Post('dev-login')
   @Public()
@@ -30,7 +35,32 @@ export class AuthController {
     return this.authService.devLogin(dto.email);
   }
 
-  /** Initiate OIDC login — redirects to the configured identity provider. */
+  // ── Real auth ─────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/auth/register
+   * 5 requests per hour per IP (overrides the default 100/min throttler).
+   */
+  @Post('register')
+  @Public()
+  @Throttle({ default: { ttl: 3_600_000, limit: 5 } })
+  register(@Body() dto: RegisterUserDto) {
+    return this.authService.register(dto);
+  }
+
+  /**
+   * POST /api/auth/login
+   * Per-email lockout (5 failures / 15 min) is enforced inside AuthService.
+   * The global 100/min IP throttler still applies here.
+   */
+  @Post('login')
+  @Public()
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
+
+  // ── OIDC ──────────────────────────────────────────────────────────────────
+
   @Get('oidc/login')
   @Public()
   async oidcLogin(@Res() res: Response) {
@@ -44,7 +74,6 @@ export class AuthController {
     return res.redirect(url);
   }
 
-  /** OIDC callback — exchanges code, looks up user by ssoSubject, issues JWT. */
   @Get('oidc/callback')
   @Public()
   async oidcCallback(
@@ -60,7 +89,6 @@ export class AuthController {
 
     const { access_token } = await this.oidcService.handleCallback(query, state);
 
-    // Issue as httpOnly cookie for browser sessions
     res.cookie('access_token', access_token, {
       httpOnly: true,
       sameSite: 'lax',
@@ -68,7 +96,6 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
     });
 
-    // Also return in body for API/SPA clients that prefer bearer tokens
     return res.json({ access_token });
   }
 }

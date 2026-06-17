@@ -75,6 +75,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               )}
               {isItAdmin && (
                 <>
+                  <NavLink to="/admin/pending-users" className={navClass}>
+                    Pending Users
+                  </NavLink>
                   <NavLink to="/admin/devices" className={navClass}>
                     Devices
                   </NavLink>

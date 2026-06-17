@@ -14,6 +14,13 @@ enum UserStatus {
   INACTIVE
 }
 
+enum AccountStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
 enum RoleName {
   EMPLOYEE
   AGENT
@@ -93,14 +100,18 @@ enum DeviceRequestStatus {
 // ─── Identity & Access ───────────────────────────────────────────────────────
 
 model User {
-  id         String     @id @default(cuid())
-  name       String
-  email      String     @unique
-  department String?
-  ssoSubject String     @unique
-  status     UserStatus @default(ACTIVE)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  department    String?
+  ssoSubject    String?       @unique
+  passwordHash  String?
+  accountStatus AccountStatus @default(PENDING_APPROVAL)
+  approvedById  String?
+  approvedAt    DateTime?
+  status        UserStatus    @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // §3.4 — reporting line for device-request manager scoping
   managerId  String?
@@ -109,6 +120,9 @@ model User {
 
   // §3.4 — team grouping for Agent/L2-L3 dashboard scope
   teamId     String?
+
+  approvedBy    User?          @relation("UserApprovals", fields: [approvedById], references: [id])
+  approvedUsers User[]         @relation("UserApprovals")
 
   ticketsRaised   Ticket[]        @relation("TicketRequester")
   ticketsAssigned Ticket[]        @relation("TicketAssignee")

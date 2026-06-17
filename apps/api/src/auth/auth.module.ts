@@ -8,6 +8,7 @@ import { OidcService } from './oidc.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       }),
     }),
     PrismaModule,
+    NotificationsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, OidcService, JwtStrategy, JwtAuthGuard, RolesGuard],
