@@ -15,13 +15,13 @@ from typing import Any
 import asyncpg
 import chromadb
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, HTTPException
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-load_dotenv()
+load_dotenv(find_dotenv(usecwd=False))
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("ai-service")
