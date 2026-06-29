@@ -54,7 +54,7 @@ export class SlaProcessor extends WorkerHost {
   // ── CHECK_SLA_WARNINGS ────────────────────────────────────────────────────
   // Idempotent: query filters sla75WarningSent=false; atomic updateMany guards
   // against double-processing if the job fires twice in the same window.
-  private async checkSlaWarnings(): Promise<void> {
+  async checkSlaWarnings(): Promise<void> {
     const now = new Date();
 
     const tickets = await this.prisma.ticket.findMany({

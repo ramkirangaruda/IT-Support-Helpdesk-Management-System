@@ -18,6 +18,9 @@ const CONFIRMATION_RE =
 // Regex to detect that the previous AI message was offering to create a ticket
 const DRAFT_OFFERED_RE = /\bticket\b/i;
 
+// Public base URL used in the ticket-creation confirmation link (matches CORS/main.ts default)
+const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
@@ -78,13 +81,8 @@ export class ChatService {
       history:    aiHistory,
     });
 
-    // 4. Save the assistant reply
-    const assistantMsg = await this.prisma.chatMessage.create({
-      data: { sessionId, role: ChatRole.ASSISTANT, content: aiResponse.reply },
-      select: { id: true, role: true, content: true, createdAt: true },
-    });
-
-    // 5. Determine whether to create a ticket
+    // 4. Decide whether to create a ticket BEFORE persisting the assistant reply, so the
+    //    confirmation can carry the REAL ticket id instead of the LLM's reply text.
     let ticketId: string | null = null;
 
     const alreadyHasTicket = session.ticketId !== null;
@@ -101,6 +99,18 @@ export class ChatService {
         );
       }
     }
+
+    // 5. Persist the assistant reply. When a ticket was actually created, the confirmation
+    //    is built deterministically from the REAL DB id (ticket.id) — never the LLM's reply,
+    //    which can hallucinate a fake id (e.g. "ZL-2026-..."). Otherwise show the AI reply.
+    const replyContent = ticketId
+      ? `✓ Ticket ${ticketId} has been created. You can track it here: ${FRONTEND_URL}/tickets/${ticketId}`
+      : aiResponse.reply;
+
+    const assistantMsg = await this.prisma.chatMessage.create({
+      data: { sessionId, role: ChatRole.ASSISTANT, content: replyContent },
+      select: { id: true, role: true, content: true, createdAt: true },
+    });
 
     return {
       message:    assistantMsg,

@@ -1,5 +1,14 @@
 # TicketZilla — Project Context
 
+> **DEPLOY READINESS: ✅ GO (no blockers) — FINAL QA PASS COMPLETE 2026-06-29**
+> 10-section final QA run live against a running stack (Postgres :5433, Redis :6380, API :3007,
+> AI :8001, Vite :5173). Found + fixed **1 BLOCKING** issue (migration drift — auth columns were
+> never captured in a migration; a fresh `migrate deploy` would have shipped without
+> accountStatus/passwordHash/managerId and broken auth + seed). Also fixed a ticket-ID race,
+> assign-to-non-agent, chat ticket-subject, missing indexes, unbounded list endpoints, and an
+> unused dep. Builds clean (api/web/ai), all 7 roles' pages load clean, backup→restore verified.
+> See "Final QA Pass (2026-06-29)" below. Remaining items are SHOULD-FIX/NICE-TO-HAVE, none blocking.
+
 ## Communication
 Always begin every response with "Ramkiran," before saying anything else.
 
@@ -85,6 +94,109 @@ All A-H sections completed:
 - Prisma P2002 → HTTP 409 mapped in AllExceptionsFilter
 - GET /api/admin/notifications?status=FAILED — IT_ADMIN/SYS_ADMIN only
 - Ticket ID-gen retry: P2002 on PK collision → re-generate ID, up to 3 attempts
+
+## Final QA Pass (2026-06-29) — 10-section live audit
+Ran all 10 sections against a live stack. Verdict: **READY TO DEPLOY** (1 blocker found + fixed).
+
+**BLOCKING — FOUND & FIXED:**
+- **Migration drift.** The email/password-auth columns (`accountStatus`, `passwordHash`,
+  `approvedById`, `approvedAt`, `managerId`, `teamId`, `AccountStatus` enum, `ssoSubject` nullable)
+  were applied to the dev DB via `prisma db push` but **never captured in a migration**. A fresh
+  prod `migrate deploy` (what docker-compose.prod.yml runs) would create a User table missing those
+  columns → registration/login/approval crash and seed fails (P2022). FIXED: added migration
+  `20260617000000_add_auth_account_fields`; verified fresh-DB `migrate deploy` + seed now works
+  (7 users/roles, categories, SLA, config); dev DB reconciled via `migrate resolve --applied`.
+
+**SHOULD-FIX — FIXED THIS PASS:**
+- Ticket-ID race: 10 concurrent creates → 5×HTTP 409 (`findFirst+1` with only 3 retries). FIXED with
+  a Postgres transaction advisory lock (`pg_advisory_xact_lock`) serializing INC-id generation
+  (`tickets.service.ts`). Re-tested: 10 concurrent → all unique, 0 conflicts.
+- Assign-to-non-agent: a ticket could be assigned to an EMPLOYEE/MANAGER/FINANCE. FIXED — `assign()`
+  now requires the assignee hold AGENT/L2_L3/IT_ADMIN/SYS_ADMIN (else 400).
+- Chat ticket subject: used the raw confirmation message ("yes create it") as the subject. FIXED in
+  `apps/ai-service/main.py` — draft subject/description now derive from the user's FIRST issue
+  message, not the latest. Verified: chat ticket subject = real issue, source=CHAT.
+- Unbounded list endpoints (`/devices`, `/device-requests`, `/purchase-requests`) had no `take`.
+  Added `take: 500` caps (full limit/offset paging is a follow-up).
+- Missing DB indexes. Added 11 (`Ticket.status/assigneeId/requesterId/priority`,
+  `Notification.recipientEmail+status / status`, `DeviceRequest.requesterId/status`,
+  `DeviceAllocation.employeeId/deviceId`, `ChatMessage.sessionId`) via migration
+  `20260629120000_add_performance_indexes`.
+- Removed unused `zustand` dep (web). README ports corrected to 3007/8001 + in-app-only note.
+- Added dev-only `POST /api/admin/trigger-sla-warning-check` (prod-blocked) for SLA-warning testing.
+
+**VERIFIED WORKING (live):**
+- Builds: api `nest build` ✓, web `tsc && vite build` ✓ (1 bundle-size warning only), ai `py_compile` ✓.
+- 68 endpoints: global JwtAuthGuard+RolesGuard (8 intentional @Public); role/validation/error spot-checks
+  all correct (403/400/404, no 500s); passwordHash never leaked (6 endpoints scanned).
+- Concurrency: 10 concurrent ticket creates → unique ids; 2 concurrent allocations of one device →
+  1×201 + 1×400 (atomic claim).
+- Business logic: full ticket lifecycle + every blocked transition (400), reopen window (in→ok, out→400),
+  ON_HOLD pause accounting (slaPausedMs), SLA escalate + warn (both idempotent), device reminder cycles
+  1→skip→2 (in-app), procurement chain + SoD (IT_ADMIN 403, manager-scoping 403, wrong-stage 403),
+  chat KB deflection (no ticket) + draft→confirm→CHAT ticket, AI-down graceful (201 fallback, 30s timeout).
+- Security: bcrypt $2b$12$, login enumeration parity, lockout, prompt injection rebuffed, prod mode
+  blocks dev-login + dev-triggers (403) and leaks no stack traces, all raw SQL parameterized, no
+  Math.random/eval, no `any` in auth.
+- Frontend: all 7 roles' sidebar pages load with 0 blank/crash/console-errors/5xx.
+- Ops: backup→restore round-trip verified (row-count parity); fresh-DB seed works; `migrate status` clean.
+
+**NOT FIXED (deferred / flagged for your decision):**
+- npm audit highs: API lodash (via @bull-board admin-only queue UI) + multer (via @nestjs/platform-express;
+  no upload routes exposed); web picomatch (build-tool only, not in shipped bundle). All need breaking
+  major bumps — accepted-risk, monitor.
+- Frontend limit/offset pagination UI for device/PR registers (server caps added; UI grows-past-500 follow-up).
+- 429 ThrottlerException is labelled `"error":"Internal Server Error"` (statusCode correct at 429) — cosmetic.
+- Web bundle 961 kB un-split — code-splitting NICE-TO-HAVE.
+- onDelete relations rely on safe Prisma defaults (Restrict/SetNull/Cascade) and there are NO parent-delete
+  endpoints (User/Ticket/Category/Device/PR) — explicit annotations are a NICE-TO-HAVE.
+- Case-insensitive email uniqueness is app-layer only (DB unique is case-sensitive) — citext follow-up.
+- Wall-clock SLA (working-hours calendar) still deferred. File-upload security N/A (no upload endpoints yet).
+- P3 (same person can't approve manager+finance stage) is code-verified only — no dual-role seed user to test live.
+
+## Pre-Deploy Audit (2026-06-17) — LIVE, full re-verification
+Ran against a live stack, not a code read. Re-verified the three recent changes
+(email/password auth + approval, left-sidebar/role-dashboard, Gmail removal) integrate cleanly.
+
+**CONFIRMED WORKING (live evidence):**
+- Register → PENDING (login blocked 401) → IT_ADMIN approve(EMPLOYEE) → login issues JWT with role →
+  new user sees `auth.account_approved` + `auth.registration_confirmation` as **IN_APP/SENT** notifications.
+  Role is embedded in the JWT at login (post-approval), so freshly-approved users get correct access
+  immediately — no stale-JWT window (pending users cannot mint a token at all).
+- Sidebar role-filtering: IT_ADMIN sees DASHBOARD/TICKETS/DEVICES/PROCUREMENT/KB/ADMINISTRATION + bell;
+  EMPLOYEE sees only DASHBOARD/TICKETS/DEVICES/KB (no PROCUREMENT/ADMINISTRATION/FINANCE). All roles land on /dashboard.
+- In-app notification bell polls `GET /api/notifications/me`, shows live count (verified real data, 9+/15).
+- Ticket lifecycle: NEW→ASSIGNED→IN_PROGRESS→ON_HOLD→IN_PROGRESS→RESOLVED→CLOSED→REOPENED, StatusHistory intact.
+- Reopen window: within 7d → REOPENED ok; backdated 30d → HTTP 400 with clear message.
+- SLA escalation: backdated SLA → ESCALATED + escalationLevel=1; re-run is idempotent (no double-escalate);
+  `ticket.escalated` in-app to IT_ADMIN + MANAGER.
+- Procurement chain: create PR → manager approve → finance approve → record PO → receive → Device created (RECEIVED).
+- Separation of duties: IT_ADMIN approve → 403 (live); manager+finance same-person block (code-verified);
+  device-request manager-scoping → wrong manager 403, correct reporting manager approves (live, with managerId set).
+- Security: bcrypt $2b$12$ hashes in DB; passwordHash never leaked (tickets/users/pending/ticket-detail nested);
+  login enumeration parity ("Invalid email or password" for both wrong-pw and no-user); login lockout on 6th attempt;
+  RBAC boundaries (employee→admin/stats/PR endpoints all 403/404; no-token 401); dev-login hard-blocked in prod;
+  helmet + cookie-parser + CORS locked to FRONTEND_URL + global ValidationPipe(whitelist) all active.
+- AI chat: LLM responds; confirming creates a real ticket with source=CHAT.
+- Gmail removal: source tree clean (only the 2 intentional CLAUDE.md doc lines); leftover `@google-cloud/local-auth`
+  dependency found and removed (it was also pulling vulnerable gaxios/uuid); device-reminder job runs without GmailAdapter crash.
+
+**FIXED IN THIS PASS:**
+- `apps/api/package.json` — removed leftover `@google-cloud/local-auth` (Gmail removal was incomplete; npm uninstall run).
+- `apps/web/.../admin/DashboardPage.tsx` — `/tickets?limit=200` → `100` (API caps `@Max(100)`; was 400-ing every
+  dashboard ticket widget for all roles, silently failing to load).
+- `apps/api/.../auth/auth.service.ts` + `apps/web/.../RegisterPage.tsx` — registration copy no longer promises an
+  "approval email" (email removed); now says approval appears in notifications / sign in once approved.
+
+**SHOULD-FIX-SOON (not blocking):**
+- AI chat ticket quality: confirmed chat ticket uses the raw last user message as the subject
+  (e.g. "Yes please create the ticket now.") and the chat reply shows a *hallucinated* ticket ID
+  (ZL-… ) that doesn't match the real INC-… ID. Prompt/extraction needs tuning. KB deflection unverifiable
+  (0 KB articles indexed in dev).
+- npm audit (prod deps): 10 vulns (3 high = lodash via @bull-board admin-only queue UI; multer via
+  @nestjs/platform-express, no file-upload routes exposed). Fix requires breaking major bumps — defer + monitor.
+- `apps/web/Dockerfile` chowns assets to nginx but has no `USER` directive (nginx master runs as root, official-image default).
+- README.md still lists API on :3000 in a couple of places (dev convention is :3007 per port section).
 
 ## Audit (2026-06-16)
 Full audit performed against a live stack (Postgres+Redis on Docker, API run locally).

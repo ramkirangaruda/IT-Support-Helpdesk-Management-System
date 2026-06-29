@@ -117,7 +117,7 @@ export class AuthService {
     this.logger.log(`New self-registration: ${user.email} (id=${user.id})`);
     return {
       message:
-        'Your account has been created and is pending admin approval. You will receive an email once approved.',
+        'Your account has been created and is pending admin approval. You will be able to sign in once an administrator approves your account.',
     };
   }
 

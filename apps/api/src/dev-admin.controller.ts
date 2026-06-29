@@ -34,6 +34,16 @@ export class DevAdminController {
     return { ok: true, message: 'Device limit check complete — see server logs for details' };
   }
 
+  @Post('trigger-sla-warning-check')
+  @Public()
+  async triggerSlaWarningCheck() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Dev-only endpoint');
+    }
+    await this.slaProcessor.checkSlaWarnings();
+    return { ok: true, message: 'SLA warning check complete — see server logs for details' };
+  }
+
   /**
    * GET /api/admin/notifications?status=SENT&limit=100
    * Returns notifications filtered by status. Default status = SENT.

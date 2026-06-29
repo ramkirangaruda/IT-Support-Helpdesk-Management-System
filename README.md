@@ -30,8 +30,8 @@ cd apps/api
 npx prisma migrate deploy
 npx prisma db seed
 
-# 5. Start the API
-npm run start:dev --workspace=apps/api
+# 5. Start the API (port 3007 — required; 3000 is reserved on the dev machine)
+PORT=3007 npm run start:dev --workspace=apps/api
 
 # 6. Start the frontend (new terminal)
 npm run dev --workspace=apps/web
@@ -65,10 +65,16 @@ Three-tier monorepo: React 18 + TypeScript frontend (Vite) → NestJS REST API (
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:5173 |
-| API | http://localhost:3000 |
+| API | http://localhost:3007 |
 | AI Microservice | http://localhost:8001 |
-| BullMQ Dashboard | http://localhost:3000/api/queues |
+| BullMQ Dashboard | http://localhost:3007/api/queues |
 | MinIO Console | http://localhost:9001 |
+
+> **Ports:** the API runs on **3007** and the AI service on **8001** (3000/8000 are reserved on the
+> reference dev machine). Start the API with `PORT=3007` set; Vite proxies `/api` → `:3007`.
+>
+> **Notifications are in-app only** (Notification model + admin log + sidebar bell). Gmail/email
+> sending was removed by product decision — there are no email/SMTP/Gmail env vars to configure.
 
 ## Production Deployment
 

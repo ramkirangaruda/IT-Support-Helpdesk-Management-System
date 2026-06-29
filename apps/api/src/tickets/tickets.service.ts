@@ -30,6 +30,10 @@ const SUMMARY_INCLUDE = {
 
 const DETAIL_INCLUDE = TICKET_DETAIL_INCLUDE;
 
+// Arbitrary constant key for the Postgres advisory lock that serializes ticket-id
+// generation (see create()). Any other component generating INC ids must use this key.
+const TICKET_ID_LOCK_KEY = 481_500_001;
+
 // ── RBAC helpers ─────────────────────────────────────────────────────────────
 
 type Scope = 'all' | 'assigned' | 'own';
@@ -86,21 +90,6 @@ export class TicketsService {
     }
   }
 
-  // ── ID generation ─────────────────────────────────────────────────────────
-  // Uses findFirst+orderBy desc on the INC-YYYY prefix so deleted tickets
-  // don't reset the counter. PK uniqueness catches the rare race condition.
-  private async generateId(): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `INC-${year}-`;
-    const last = await this.prisma.ticket.findFirst({
-      where: { id: { startsWith: prefix } },
-      orderBy: { id: 'desc' },
-      select: { id: true },
-    });
-    const seq = last ? parseInt(last.id.slice(prefix.length), 10) : 0;
-    return `${prefix}${String(seq + 1).padStart(6, '0')}`;
-  }
-
   // ── SLA deadlines (wall-clock, Phase 1 — BusinessCalendar wired in Phase 2) ─
   private slaDeadlines(from: Date, responseH: number, resolutionH: number) {
     const ms = (h: number) => h * 3_600_000;
@@ -112,8 +101,6 @@ export class TicketsService {
 
   // ── 1. CREATE ─────────────────────────────────────────────────────────────
   async create(dto: CreateTicketDto, actor: AuthenticatedUser) {
-    let id: string;
-    let attempts = 0;
     const now = new Date();
 
     const slaPolicy = await this.prisma.sLAPolicy.findUnique({
@@ -125,42 +112,47 @@ export class TicketsService {
 
     const initialStatus = dto.assigneeId ? TicketStatus.ASSIGNED : TicketStatus.NEW;
 
-    // ID-gen retry: re-generate on P2002 (PK collision under concurrency), up to 3 times
-    let ticket: Awaited<ReturnType<typeof this.prisma.ticket.create>>;
-    while (true) {
-      id = await this.generateId();
-      try {
-        ticket = await this.prisma.ticket.create({
-          data: {
-            id,
-            subject:     dto.subject,
-            description: dto.description,
-            priority:    dto.priority,
-            source:      dto.source,
-            categoryId:  dto.categoryId,
-            requesterId: actor.id,
-            assigneeId:  dto.assigneeId ?? null,
-            status:      initialStatus,
-            ...sla,
-            statusHistory: {
-              create: {
-                fromStatus: null,
-                toStatus:   initialStatus,
-                actorId:    actor.id,
-                reason:     'Ticket created',
-              },
+    // ID generation is serialized with a Postgres transaction-level advisory lock so
+    // concurrent creates cannot generate the same INC-YYYY-NNNNNN id. The lock is held
+    // for the duration of the tx (released automatically on commit/rollback), so the
+    // read-max → +1 → insert sequence is atomic across competing requests. PK uniqueness
+    // remains the final backstop.
+    const ticket = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${TICKET_ID_LOCK_KEY})`;
+      const year   = new Date().getFullYear();
+      const prefix = `INC-${year}-`;
+      const last = await tx.ticket.findFirst({
+        where:   { id: { startsWith: prefix } },
+        orderBy: { id: 'desc' },
+        select:  { id: true },
+      });
+      const seq = last ? parseInt(last.id.slice(prefix.length), 10) : 0;
+      const id  = `${prefix}${String(seq + 1).padStart(6, '0')}`;
+
+      return tx.ticket.create({
+        data: {
+          id,
+          subject:     dto.subject,
+          description: dto.description,
+          priority:    dto.priority,
+          source:      dto.source,
+          categoryId:  dto.categoryId,
+          requesterId: actor.id,
+          assigneeId:  dto.assigneeId ?? null,
+          status:      initialStatus,
+          ...sla,
+          statusHistory: {
+            create: {
+              fromStatus: null,
+              toStatus:   initialStatus,
+              actorId:    actor.id,
+              reason:     'Ticket created',
             },
           },
-          include: DETAIL_INCLUDE,
-        });
-        break;
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' && ++attempts < 3) {
-          continue;
-        }
-        throw err;
-      }
-    }
+        },
+        include: DETAIL_INCLUDE,
+      });
+    });
 
     await this.audit.log({
       actorId:  actor.id,
@@ -243,8 +235,21 @@ export class TicketsService {
     const existing = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!existing) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    const assignee = await this.prisma.user.findUnique({ where: { id: dto.assigneeId } });
+    const assignee = await this.prisma.user.findUnique({
+      where:   { id: dto.assigneeId },
+      include: { userRoles: { include: { role: true } } },
+    });
     if (!assignee) throw new NotFoundException(`User ${dto.assigneeId} not found`);
+
+    // Only ticket-handling roles may be assigned a ticket — an EMPLOYEE/MANAGER/FINANCE
+    // has no work queue, so assigning to them would strand the ticket.
+    const ASSIGNABLE: RoleName[] = [RoleName.AGENT, RoleName.L2_L3, RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
+    const assigneeRoles = assignee.userRoles.map((ur) => ur.role.name);
+    if (!assigneeRoles.some((r) => ASSIGNABLE.includes(r))) {
+      throw new BadRequestException(
+        `User ${assignee.name ?? assignee.email} cannot be assigned tickets — requires one of: ${ASSIGNABLE.join(', ')}`,
+      );
+    }
 
     // If the ticket is NEW, transition to ASSIGNED.
     // If already in an active state (ESCALATED, IN_PROGRESS, etc.), keep the current status

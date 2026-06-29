@@ -96,8 +96,8 @@ export default function RegisterPage() {
             Your account is <strong>pending admin approval</strong>.
           </p>
           <p className="text-sm text-gray-600 mb-6">
-            You will receive an email once an IT administrator has reviewed your request.
-            Do not attempt to log in until you receive the approval email.
+            An IT administrator will review your request. Once approved, you can sign in
+            with your email and password — your approval will appear in your notifications.
           </p>
           <Link
             to="/login"

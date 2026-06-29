@@ -367,23 +367,30 @@ async def chat(req: ChatRequest) -> ChatResponse:
     ticket_draft = None
     user_turns = _count_user_turns(req.history) + 1  # +1 for current message
     if user_turns >= 2 and not top_similarity > 0.80:
-        # Ask the LLM to classify this conversation for the draft
+        # Derive the ticket subject/description from the user's ORIGINAL issue
+        # (their first message), NOT the latest message — which on the confirmation
+        # turn is something like "yes, create the ticket" and makes a useless subject.
+        user_msgs = [h.content for h in req.history if h.role == "user"]
+        issue_text = user_msgs[0] if user_msgs else req.message
+        issue_desc = "\n".join(user_msgs) if user_msgs else req.message
+
+        # Ask the LLM to classify the actual issue for the draft
         classify_req = ClassifyRequest(
-            message=req.message,
-            context=f"Conversation so far: {req.history[-1].content if req.history else ''}",
+            message=issue_text,
+            context=f"Conversation so far: {issue_desc}",
         )
         try:
             classification = await classify(classify_req)
             ticket_draft = TicketDraft(
-                subject=req.message[:120],
-                description=req.message,
+                subject=issue_text[:120],
+                description=issue_desc,
                 priority=classification.priority,
                 category=classification.category,
             )
         except Exception:
             ticket_draft = TicketDraft(
-                subject=req.message[:120],
-                description=req.message,
+                subject=issue_text[:120],
+                description=issue_desc,
                 priority="MEDIUM",
                 category="Other",
             )

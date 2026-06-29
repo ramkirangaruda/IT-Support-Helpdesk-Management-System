@@ -670,7 +670,7 @@ interface MyDeviceReq { id: string; status: string }
 function EmployeeDashboard() {
   const { data: ticketsRes } = useQuery<MyTicketsRes>({
     queryKey: ['my-tickets-dashboard'],
-    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 100 } }).then(r => r.data),
     refetchInterval: 60_000,
   });
   const { data: deviceReqs = [] } = useQuery<MyDeviceReq[]>({
@@ -730,7 +730,7 @@ function EmployeeDashboard() {
 function AgentDashboard() {
   const { data: ticketsRes } = useQuery<MyTicketsRes>({
     queryKey: ['agent-tickets-dashboard'],
-    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 100 } }).then(r => r.data),
     refetchInterval: 60_000,
   });
 
@@ -804,7 +804,7 @@ function ManagerDashboard() {
   });
   const { data: ticketsRes } = useQuery<MyTicketsRes>({
     queryKey: ['mgr-own-tickets'],
-    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 200 } }).then(r => r.data),
+    queryFn: () => api.get<MyTicketsRes>('/tickets', { params: { limit: 100 } }).then(r => r.data),
     refetchInterval: 60_000,
   });
 

@@ -150,6 +150,7 @@ export class ProcurementService {
       where,
       include: PR_INCLUDE,
       orderBy: { createdAt: 'desc' },
+      take:    500, // guard against unbounded scan; full paging is a follow-up
     });
   }
 

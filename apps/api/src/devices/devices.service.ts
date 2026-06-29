@@ -91,9 +91,12 @@ export class DevicesService {
   }
 
   async findAllDevices() {
+    // Hard cap to avoid an unbounded full-table scan. Real limit/offset paging is a
+    // follow-up once the register grows past this; 500 covers near-term volumes.
     return this.prisma.device.findMany({
       include:  DEVICE_INCLUDE,
       orderBy:  { createdAt: 'desc' },
+      take:     500,
     });
   }
 
@@ -310,6 +313,7 @@ export class DevicesService {
       where,
       include: REQUEST_INCLUDE,
       orderBy: { createdAt: 'desc' },
+      take:    500, // guard against unbounded scan; full paging is a follow-up
     });
   }
 

@@ -225,6 +225,11 @@ model Ticket {
   statusHistory StatusHistory[]
   notifications Notification[]
   chatSession   ChatSession?
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([requesterId])
+  @@index([priority])
 }
 
 model Comment {
@@ -276,6 +281,9 @@ model Notification {
   createdAt      DateTime            @default(now())
 
   ticket Ticket? @relation(fields: [ticketId], references: [id])
+
+  @@index([recipientEmail, status])
+  @@index([status])
 }
 
 // ─── AI / Chat ────────────────────────────────────────────────────────────────
@@ -300,6 +308,8 @@ model ChatMessage {
   createdAt DateTime @default(now())
 
   session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
 
 // ─── Knowledge Base ──────────────────────────────────────────────────────────
@@ -359,6 +369,9 @@ model DeviceRequest {
   manager          User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id])
   allocation       DeviceAllocation?
   purchaseRequests PurchaseRequest[]
+
+  @@index([requesterId])
+  @@index([status])
 }
 
 model DeviceAllocation {
@@ -375,6 +388,9 @@ model DeviceAllocation {
   device   Device         @relation(fields: [deviceId],   references: [id])
   employee User           @relation("UserDeviceAllocations", fields: [employeeId], references: [id])
   request  DeviceRequest? @relation(fields: [requestId],  references: [id])
+
+  @@index([employeeId])
+  @@index([deviceId])
 }
 
 model DeviceReminder {
