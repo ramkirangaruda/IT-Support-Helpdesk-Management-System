@@ -12,6 +12,8 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { OidcService } from './oidc.service';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { AuthenticatedUser } from './auth.types';
 import { Public } from './decorators/public.decorator';
 import { DevLoginDto } from './dto/dev-login.dto';
 import { LoginDto } from './dto/login.dto';
@@ -57,6 +59,14 @@ export class AuthController {
   @Public()
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  /**
+   * GET /api/auth/me — current user profile (protected by the global JwtAuthGuard).
+   */
+  @Get('me')
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.me(user.id);
   }
 
   // ── OIDC ──────────────────────────────────────────────────────────────────

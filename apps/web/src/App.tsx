@@ -31,6 +31,7 @@ const ProcurementPipelinePage   = lazy(() => import('./pages/admin/ProcurementPi
 const FinancePurchaseRequestsPage = lazy(() => import('./pages/finance/FinancePurchaseRequestsPage'));
 const FinanceApprovalsPage      = lazy(() => import('./pages/finance/FinanceApprovalsPage'));
 const AdminPendingUsersPage     = lazy(() => import('./pages/admin/AdminPendingUsersPage'));
+const AdminUsersPage            = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminNotificationsPage    = lazy(() => import('./pages/admin/AdminNotificationsPage'));
 
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
@@ -129,6 +130,10 @@ export default function App() {
           <Route
             path="/admin/pending-users"
             element={<ProtectedRoute roles={IT_ADMIN_ROLES}><AdminPendingUsersPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/users"
+            element={<ProtectedRoute roles={IT_ADMIN_ROLES}><AdminUsersPage /></ProtectedRoute>}
           />
           <Route
             path="/admin/notifications"

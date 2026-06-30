@@ -1,15 +1,37 @@
 import { AccountStatus, PrismaClient, Priority, RoleName } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
+const BCRYPT_ROUNDS = 12; // matches AuthService
+
+/** Strong, url-safe random password (~140 bits entropy). Never hardcoded or persisted in plaintext. */
+function generateStrongPassword(): string {
+  return randomBytes(18).toString('base64url');
+}
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
+// `bootstrap` → real email/password SYS_ADMIN whose password is GENERATED at seed time,
+//   printed once to the console, and stored only as a bcrypt hash (never in a file/AuditLog).
+// `password` set → real email/password account with a fixed password (bcrypt-hashed).
+// Neither → dev-login / OIDC account (ssoSubject set, no passwordHash).
 const USERS: Array<{
   email: string;
   name: string;
   department: string;
   roles: RoleName[];
+  password?: string;
+  bootstrap?: boolean;
 }> = [
+  {
+    // Bootstrap SYS_ADMIN — password generated + printed once during seeding.
+    email: 'admin@ticketzilla.dev',
+    name: 'TicketZilla Admin',
+    department: 'IT',
+    roles: [RoleName.SYS_ADMIN],
+    bootstrap: true,
+  },
   {
     email: 'employee@test.com',
     name: 'Test Employee',
@@ -142,16 +164,53 @@ async function seedCategories(): Promise<void> {
   );
 }
 
-async function seedUsers(roleMap: Record<RoleName, string>): Promise<void> {
+/** Returns the generated bootstrap credential to print once, or null if already provisioned. */
+async function seedUsers(
+  roleMap: Record<RoleName, string>,
+): Promise<{ email: string; password: string } | null> {
+  let bootstrapCredential: { email: string; password: string } | null = null;
+
   for (const u of USERS) {
+    let passwordHash: string | null = null;
+    let kind = 'dev-login';
+
+    if (u.bootstrap) {
+      // Generate a password only on FIRST provision so re-seeding never rotates (or prints) it.
+      const existing = await prisma.user.findUnique({
+        where: { email: u.email },
+        select: { passwordHash: true },
+      });
+      if (existing?.passwordHash) {
+        kind = 'bootstrap (already set)';
+      } else {
+        const generated = generateStrongPassword();
+        passwordHash = await bcrypt.hash(generated, BCRYPT_ROUNDS);
+        bootstrapCredential = { email: u.email, password: generated };
+        kind = 'bootstrap (generated)';
+      }
+    } else if (u.password) {
+      passwordHash = await bcrypt.hash(u.password, BCRYPT_ROUNDS);
+      kind = 'password';
+    }
+
+    const isCredential = !!u.password || !!u.bootstrap;
+
     const user = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, department: u.department, accountStatus: AccountStatus.ACTIVE },
+      update: {
+        name: u.name,
+        department: u.department,
+        accountStatus: AccountStatus.ACTIVE,
+        // Only write a hash when we actually have one (don't clobber an existing bootstrap password).
+        ...(passwordHash && { passwordHash }),
+      },
       create: {
         email: u.email,
         name: u.name,
         department: u.department,
-        ssoSubject: `dev|${u.email}`,
+        // Credentialed accounts have no SSO subject; dev-login accounts have no password.
+        ssoSubject: isCredential ? null : `dev|${u.email}`,
+        passwordHash,
         accountStatus: AccountStatus.ACTIVE,
       },
     });
@@ -165,10 +224,10 @@ async function seedUsers(roleMap: Record<RoleName, string>): Promise<void> {
       })),
     });
 
-    const roleLabels = u.roles.join(', ');
-    console.log(`    ${u.email.padEnd(26)} [${roleLabels}]`);
+    console.log(`    ${u.email.padEnd(26)} [${u.roles.join(', ')}] (${kind})`);
   }
   console.log(`  ✓ ${USERS.length} users`);
+  return bootstrapCredential;
 }
 
 async function seedSystemConfig(): Promise<void> {
@@ -197,9 +256,27 @@ async function main() {
   await seedSystemConfig();
 
   console.log('  Users:');
-  await seedUsers(roleMap);
+  const bootstrap = await seedUsers(roleMap);
 
   console.log('\n✅ Done.');
+
+  // Print the bootstrap SYS_ADMIN password ONCE. It is stored only as a bcrypt hash —
+  // not in any file or AuditLog — so this console output is the only place it ever appears.
+  if (bootstrap) {
+    const line = '═'.repeat(64);
+    console.log(`\n${line}`);
+    console.log('  BOOTSTRAP SYS_ADMIN CREDENTIALS — shown once, SAVE THIS NOW');
+    console.log(`${line}`);
+    console.log(`  email:    ${bootstrap.email}`);
+    console.log(`  password: ${bootstrap.password}`);
+    console.log(`${line}`);
+    console.log('  This password is NOT stored anywhere except as a bcrypt hash.');
+    console.log('  Re-running the seed will NOT reprint or change it.');
+    console.log(`${line}\n`);
+  } else if (USERS.some((u) => u.bootstrap)) {
+    console.log('\n  ℹ Bootstrap SYS_ADMIN already provisioned — password unchanged (not shown).');
+    console.log('    Reset the DB or clear its passwordHash to generate a new one.\n');
+  }
 }
 
 main()

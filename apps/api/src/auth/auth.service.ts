@@ -72,6 +72,18 @@ export class AuthService {
     return { access_token: this.jwt.sign(payload) };
   }
 
+  // ── Current user profile ────────────────────────────────────────────────────
+
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: SAFE_USER_SELECT,
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    const { userRoles, ...rest } = user;
+    return { ...rest, roles: userRoles.map((ur) => ur.role.name) };
+  }
+
   // ── Self-registration ─────────────────────────────────────────────────────
 
   async register(dto: RegisterUserDto): Promise<{ message: string }> {

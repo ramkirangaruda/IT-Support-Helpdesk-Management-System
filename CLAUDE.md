@@ -347,6 +347,33 @@ Navigation is a **collapsible left sidebar** (not a top nav bar). There is no to
 - POST /api/admin/pending-users/:id/approve — approve with role assignment
 - POST /api/admin/pending-users/:id/reject — reject with reason
 
+## User management (2026-06-30) — full role administration
+Built on top of the existing multi-role model (UserRole join + accountStatus) — NOT a single-role
+enum. The dev-login dropdown remains a dev-only convenience (hard-blocked in prod); real
+email/password auth was already in place.
+- `GET /api/auth/me` — current user's profile (id, name, email, department, roles[], accountStatus,
+  status) from the DB; passwordHash never selected. Protected by the global JwtAuthGuard.
+- `GET /api/admin/users?accountStatus=&role=` — IT_ADMIN/SYS_ADMIN. Full user list (all statuses)
+  with flattened `roles[]`; passwordHash excluded.
+- `PATCH /api/admin/users/:id/role` — IT_ADMIN/SYS_ADMIN. Body `{ role }`. Replaces the user's roles
+  with `[role]`; if the target was PENDING_APPROVAL it is **activated** (register → pending → assign
+  role → access). Rules (enforced in `AdminUsersService.assignRole`): can't change own role; only
+  SYS_ADMIN can grant SYS_ADMIN or change an existing SYS_ADMIN; IT_ADMIN can assign any other role.
+- `PATCH /api/admin/users/:id/deactivate` — **SYS_ADMIN only** (method-level `@Roles(SYS_ADMIN)`).
+  Sets `status=INACTIVE`; the JWT strategy's ACTIVE check then blocks the user's existing token.
+- Frontend `/admin/users` (`AdminUsersPage`, lazy route, sidebar "User Management" under
+  ADMINISTRATION): All/Pending/Active tabs, pending rows highlighted, per-row role dropdown + Assign,
+  Deactivate (SYS_ADMIN only), toasts. Role options and Deactivate are gated by the caller's role;
+  the caller's own row is locked.
+- **Auth now persists across reload:** `api/token.ts` stores the JWT in `localStorage`
+  (`tz_access_token`) and `AuthContext` rehydrates the session on app load, clearing the token if it's
+  expired/invalid. (Previously the token lived only in memory, so a refresh logged you out.)
+- **Bootstrap SYS_ADMIN** (`prisma/seed.ts`): `admin@ticketzilla.dev` gets a **strong random password
+  generated at seed time** (`crypto.randomBytes`, bcrypt-hashed), printed ONCE to the console and stored
+  nowhere else (no file, no AuditLog). Generated only on first provision — re-seeding neither reprints
+  nor rotates it (clear its `passwordHash` / reset DB to mint a new one). The `*@test.com` users remain
+  dev-login/OIDC (no password).
+
 ## Dev-only endpoints (NODE_ENV ≠ production)
 - POST /api/auth/dev-login — get a JWT for any test user (hard-blocked in production)
 - POST /api/admin/trigger-escalation-check — manually fire SLA escalation check

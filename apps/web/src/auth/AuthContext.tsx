@@ -1,5 +1,5 @@
 import { createContext, useCallback, useMemo, useState } from 'react';
-import { setToken } from '../api/token';
+import { getToken, setToken } from '../api/token';
 
 export interface AuthUser {
   sub:   string;
@@ -31,9 +31,23 @@ function decodeJwt(token: string): AuthUser | null {
   }
 }
 
+// On app load, restore the session from the persisted token — but only if it decodes
+// and hasn't expired. An expired/invalid token is cleared so the user lands on /login.
+function restoreSession(): { token: string | null; user: AuthUser | null } {
+  const stored = getToken();
+  if (!stored) return { token: null, user: null };
+  const decoded = decodeJwt(stored);
+  if (!decoded || (decoded.exp && decoded.exp * 1000 <= Date.now())) {
+    setToken(null);
+    return { token: null, user: null };
+  }
+  return { token: stored, user: decoded };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setTokenState] = useState<string | null>(null);
-  const [user,  setUser]        = useState<AuthUser | null>(null);
+  const initial = restoreSession();
+  const [token, setTokenState] = useState<string | null>(initial.token);
+  const [user,  setUser]        = useState<AuthUser | null>(initial.user);
 
   const login = useCallback((newToken: string) => {
     const decoded = decodeJwt(newToken);

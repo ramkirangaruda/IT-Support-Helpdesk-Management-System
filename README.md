@@ -44,17 +44,29 @@ python main.py
 
 ## Seed User Credentials
 
-All seed users have password `password123` in production OIDC, or use `POST /api/auth/dev-login` in dev.
+**Bootstrap SYS_ADMIN — `admin@ticketzilla.dev`:** the seed generates a **strong random password
+at seed time** and prints it **once** to the console. It is stored only as a bcrypt hash (never in a
+file or AuditLog), so that console output is the only place it ever appears.
 
-| Email | Role | Access |
-|-------|------|--------|
-| `employee@test.com` | EMPLOYEE | Raise tickets, request devices |
-| `agent@test.com` | AGENT | Work tickets, add internal notes |
-| `l2@test.com` | L2_L3 | Escalated tickets, agent assist |
-| `manager@test.com` | MANAGER | Approve device requests, purchase requests |
-| `admin@test.com` | IT_ADMIN | Full admin — devices, procurement, users |
-| `finance@test.com` | FINANCE | Finance approvals queue |
-| `sysadmin@test.com` | SYS_ADMIN | System config, all access |
+> After seeding, the bootstrap SYS_ADMIN password is printed once to the console — **save it
+> immediately**. Change it after first login if a password-change feature exists; otherwise note it
+> securely. Re-running the seed does **not** reprint or rotate it (it only generates on first
+> provision). To mint a fresh one, clear that user's `passwordHash` (or reset the DB) and re-seed.
+
+Log in via the `/login` form or `POST /api/auth/login`. The `*@test.com` users below are
+**dev-login / OIDC** accounts (no password) — sign in via the dev-login dropdown (dev only) or
+`POST /api/auth/dev-login`.
+
+| Email | Role | Login | Access |
+|-------|------|-------|--------|
+| `admin@ticketzilla.dev` | SYS_ADMIN | **password** (generated at seed, printed once) | All access; manage users at `/admin/users` |
+| `employee@test.com` | EMPLOYEE | dev-login | Raise tickets, request devices |
+| `agent@test.com` | AGENT | dev-login | Work tickets, add internal notes |
+| `l2@test.com` | L2_L3 | dev-login | Escalated tickets, agent assist |
+| `manager@test.com` | MANAGER | dev-login | Approve device requests, purchase requests |
+| `admin@test.com` | IT_ADMIN | dev-login | Full admin — devices, procurement, users |
+| `finance@test.com` | FINANCE | dev-login | Finance approvals queue |
+| `sysadmin@test.com` | SYS_ADMIN | dev-login | System config, all access |
 
 ## Architecture
 

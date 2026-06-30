@@ -15,6 +15,7 @@ import {
   BookOpen,
   PenLine,
   Users,
+  UserCog,
   BarChart2,
   Bell,
   LogOut,
@@ -99,6 +100,7 @@ const NAV: NavSection[] = [
     sectionRoles: ['IT_ADMIN', 'SYS_ADMIN'],
     items: [
       { label: 'Pending Users',    to: '/admin/pending-users',  icon: <Users size={18} /> },
+      { label: 'User Management',  to: '/admin/users',          icon: <UserCog size={18} /> },
       { label: 'Reports',          to: '/dashboard',            icon: <BarChart2 size={18} />, exact: true },
       { label: 'Notification Log', to: '/admin/notifications',  icon: <Bell size={18} /> },
     ],
