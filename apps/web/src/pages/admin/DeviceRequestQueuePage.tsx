@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import Pagination from '../../components/Pagination';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,8 +75,8 @@ function AllocateModal({
   const { data: available = [], isLoading } = useQuery<AvailableDevice[]>({
     queryKey: ['devices-available', request.deviceType],
     queryFn: () =>
-      api.get<AvailableDevice[]>('/devices', { params: { status: 'AVAILABLE', type: request.deviceType } })
-        .then(r => r.data),
+      api.get<{ data: AvailableDevice[] }>('/devices', { params: { status: 'AVAILABLE', type: request.deviceType, limit: 100 } })
+        .then(r => r.data.data),
   });
 
   const allocateMutation = useMutation({
@@ -183,9 +184,11 @@ export default function DeviceRequestQueuePage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [allocatingRequest, setAllocatingRequest] = useState<DeviceRequest | null>(null);
 
+  const [page, setPage] = useState(1);
+
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['device-requests'],
-    queryFn: () => api.get<DeviceRequest[]>('/device-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
@@ -196,7 +199,10 @@ export default function DeviceRequestQueuePage() {
     return true;
   });
 
-  const display = tab === 'pending' ? pendingFulfilment : allFiltered;
+  const display      = tab === 'pending' ? pendingFulfilment : allFiltered;
+  const PAGE_SIZE    = 20;
+  const totalPages   = Math.max(1, Math.ceil(display.length / PAGE_SIZE));
+  const pagedDisplay = display.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <Layout>
@@ -210,7 +216,7 @@ export default function DeviceRequestQueuePage() {
         {(['pending', 'all'] as Tab[]).map(t => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg border border-b-0 transition-colors ${
               tab === t
                 ? 'bg-white border-gray-200 text-indigo-600 -mb-px'
@@ -232,7 +238,7 @@ export default function DeviceRequestQueuePage() {
         <div className="mb-4">
           <select
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
+            onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white
                        focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
@@ -273,7 +279,7 @@ export default function DeviceRequestQueuePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {display.map(req => (
+              {pagedDisplay.map(req => (
                 <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">
                     {req.id.slice(0, 12)}…
@@ -316,6 +322,10 @@ export default function DeviceRequestQueuePage() {
           </table>
         )}
       </div>
+
+      {!isLoading && display.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} total={display.length} onPageChange={setPage} />
+      )}
 
       {allocatingRequest && (
         <AllocateModal

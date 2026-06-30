@@ -9,6 +9,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import {
   ApprovalDecision,
   DeviceStatus,
+  Prisma,
   PurchaseRequestStatus,
   RoleName,
   UserStatus,
@@ -17,6 +18,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaginationQueryDto, paginated } from '../common/dto/pagination-query.dto';
 import { ApprovePrDecision, ApprovePrDto } from './dto/approve-pr.dto';
 import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
 import { CreateVendorDto } from './dto/create-vendor.dto';
@@ -132,10 +134,12 @@ export class ProcurementService {
     return pr;
   }
 
-  async list(actor: AuthenticatedUser) {
+  async list(actor: AuthenticatedUser, query: PaginationQueryDto = {}) {
+    const page  = query.page  ?? 1;
+    const limit = query.limit ?? 20;
     const hasRole = (r: RoleName) => actor.roles.includes(r);
 
-    let where: Record<string, unknown> = {};
+    let where: Prisma.PurchaseRequestWhereInput = {};
     if (hasRole(RoleName.IT_ADMIN) || hasRole(RoleName.SYS_ADMIN)) {
       where = {};
     } else if (hasRole(RoleName.MANAGER)) {
@@ -146,12 +150,17 @@ export class ProcurementService {
       where = { raisedById: actor.id };
     }
 
-    return this.prisma.purchaseRequest.findMany({
-      where,
-      include: PR_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      take:    500, // guard against unbounded scan; full paging is a follow-up
-    });
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.purchaseRequest.findMany({
+        where,
+        include: PR_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip:    (page - 1) * limit,
+        take:    limit,
+      }),
+      this.prisma.purchaseRequest.count({ where }),
+    ]);
+    return paginated(data, total, page, limit);
   }
 
   async getOne(id: string, actor: AuthenticatedUser) {

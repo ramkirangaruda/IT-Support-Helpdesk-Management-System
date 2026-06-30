@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ProcurementService } from './procurement.service';
 import { ApprovePrDto } from './dto/approve-pr.dto';
 import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
@@ -30,11 +31,14 @@ export class PurchaseRequestController {
     return this.service.create(dto, user);
   }
 
-  // GET /purchase-requests — scoped by role
+  // GET /purchase-requests — scoped by role, paginated
   @Get()
   @Roles(...VIEWER_ROLES)
-  list(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.list(user);
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.service.list(user, query);
   }
 
   // GET /purchase-requests/:id

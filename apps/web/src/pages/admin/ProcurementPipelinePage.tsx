@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import Pagination from '../../components/Pagination';
 
 interface Vendor {
   id: string;
@@ -319,13 +320,14 @@ function ReceiveModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => voi
 
 export default function ProcurementPipelinePage() {
   const [filter, setFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
   const [showNewModal, setShowNewModal] = useState(false);
   const [poTarget, setPoTarget] = useState<PurchaseRequest | null>(null);
   const [receiveTarget, setReceiveTarget] = useState<PurchaseRequest | null>(null);
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['procurement-prs'],
-    queryFn: () => api.get<PurchaseRequest[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
@@ -335,6 +337,9 @@ export default function ProcurementPipelinePage() {
   });
 
   const filtered = filter === 'ALL' ? prs : prs.filter(pr => pr.status === filter);
+  const PAGE_SIZE  = 20;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged      = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const counts = prs.reduce<Record<string, number>>((acc, pr) => {
     acc[pr.status] = (acc[pr.status] ?? 0) + 1;
@@ -366,7 +371,7 @@ export default function ProcurementPipelinePage() {
           return (
             <button
               key={tab.key}
-              onClick={() => setFilter(tab.key)}
+              onClick={() => { setFilter(tab.key); setPage(1); }}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
                 active
                   ? 'bg-indigo-600 text-white border-indigo-600'
@@ -419,7 +424,7 @@ export default function ProcurementPipelinePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map(pr => (
+                {paged.map(pr => (
                   <tr key={pr.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">
                       {pr.id}
@@ -487,6 +492,10 @@ export default function ProcurementPipelinePage() {
             </table>
           </div>
         </div>
+      )}
+
+      {!isLoading && filtered.length > 0 && (
+        <Pagination page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       )}
 
       {showNewModal && <NewPrModal onClose={() => setShowNewModal(false)} />}

@@ -1,13 +1,15 @@
 # TicketZilla — Project Context
 
-> **DEPLOY READINESS: ✅ GO (no blockers) — FINAL QA PASS COMPLETE 2026-06-29**
-> 10-section final QA run live against a running stack (Postgres :5433, Redis :6380, API :3007,
-> AI :8001, Vite :5173). Found + fixed **1 BLOCKING** issue (migration drift — auth columns were
-> never captured in a migration; a fresh `migrate deploy` would have shipped without
-> accountStatus/passwordHash/managerId and broken auth + seed). Also fixed a ticket-ID race,
-> assign-to-non-agent, chat ticket-subject, missing indexes, unbounded list endpoints, and an
-> unused dep. Builds clean (api/web/ai), all 7 roles' pages load clean, backup→restore verified.
-> See "Final QA Pass (2026-06-29)" below. Remaining items are SHOULD-FIX/NICE-TO-HAVE, none blocking.
+> **DEPLOY READINESS: ✅ GO — ALL KNOWN ISSUES RESOLVED — 2026-06-30**
+> Every previously-deferred item that was fixable pre-deploy is now fixed and verified (see
+> "Deferred-Items Cleanup (2026-06-30)" below). Builds clean (api/web/ai), all 7 roles' pages load
+> with zero console errors / 5xx, pagination works, the web Docker image now builds and serves
+> **non-root**, and the bundle is code-split (35 KB entry, was 961 KB). The earlier blocking
+> migration-drift fix (2026-06-29) remains in place. No open blockers.
+>
+> **DEPLOY READINESS history:** 1 BLOCKING found+fixed on 2026-06-29 (migration drift — auth columns
+> were never captured in a migration; a fresh `migrate deploy` would have shipped without
+> accountStatus/passwordHash/managerId and broken auth + seed). See "Final QA Pass (2026-06-29)".
 
 ## Communication
 Always begin every response with "Ramkiran," before saying anything else.
@@ -94,6 +96,54 @@ All A-H sections completed:
 - Prisma P2002 → HTTP 409 mapped in AllExceptionsFilter
 - GET /api/admin/notifications?status=FAILED — IT_ADMIN/SYS_ADMIN only
 - Ticket ID-gen retry: P2002 on PK collision → re-generate ID, up to 3 attempts
+
+## Deferred-Items Cleanup (2026-06-30) — all 7 fixes applied + verified
+Closed out every deferred item that was fixable before deploy. Builds clean (api/web/ai); 7-role
+live sweep = 0 console errors / 0 5xx / no blank pages.
+
+1. **429 error label.** `AllExceptionsFilter` now has a `ThrottlerException` branch →
+   `{statusCode:429, error:"Too Many Requests", message:"Too many requests. Please wait before
+   trying again."}`. Verified live (was mislabeled "Internal Server Error").
+2. **Pagination (UI + backend).** Added `common/dto/pagination-query.dto.ts` (`page`/`limit`,
+   max 100, default 20) + `paginated()` envelope `{data,total,page,limit,totalPages}`. Endpoints
+   `/tickets`, `/devices`, `/device-requests`, `/purchase-requests` now paginate server-side
+   (devices also gained `status`/`type` filters — this fixed a latent bug where the allocate
+   picker's `?status=AVAILABLE&type=` params were silently ignored). Frontend: shared
+   `components/Pagination.tsx` (Prev/Next + "Page X of Y"); DeviceRegisterPage is server-paginated
+   (filters pushed to the API); ProcurementPipelinePage + DeviceRequestQueuePage use client-side
+   paging over a 100-row fetch (to keep their status-count badges/tabs working); TicketListPage &
+   AdminTicketQueuePage already paged. **All other consumers of the now-enveloped endpoints**
+   (dashboards, manager/finance approval queues, my-device-requests) updated to read `.data.data`
+   with `limit:100`. Verified live on all target pages.
+3. **Case-insensitive email at DB level.** Migration `20260629130000_user_email_lower_unique`
+   adds `CREATE UNIQUE INDEX user_email_lower_unique ON "User"(LOWER(email))`. DTOs already
+   lowercase+trim. Verified: registering `Employee@test.com`/`EMPLOYEE@TEST.COM` → 409; a direct
+   case-variant DB insert is rejected by the index. (App returns 409 Conflict, the correct
+   duplicate status, rather than 400.) NOTE: Prisma can't model a functional index, so this is a
+   manual migration — do not run `prisma migrate dev` against prod (it'd flag it as drift).
+4. **Explicit onDelete on all relations.** Every relation now states Cascade/Restrict/SetNull
+   explicitly (migration `20260629140000_explicit_ondelete`). Only two actually changed at the DB
+   level — `Notification.ticket` and `ChatSession.ticket` → **Cascade** (per spec). All others
+   already matched their chosen default (no Restrict→Cascade was changed silently).
+   **FLAGGED:** `ApprovalStep`→`PurchaseRequest` is a **polymorphic** `parentType`/`parentId`
+   reference (no FK), so it can't take onDelete without a redesign — documented in schema + README;
+   PRs are never hard-deleted today.
+5. **Dockerfile non-root.** `apps/api` (USER nestjs) and `apps/ai-service` (USER appuser) already
+   ran non-root. `apps/web` now uses `nginxinc/nginx-unprivileged:alpine`, runs as **uid 101
+   (nginx)**, listens on **8080**. While fixing this I found the web image **could not build at
+   all**: `nginx.conf` was missing entirely (created it — SPA `try_files` + `/api` proxy via Docker
+   DNS resolver so nginx starts even if api is down), `npm ci` had no lockfile in the web context
+   (→ `npm install`), and there was no `.dockerignore` (added — Windows `node_modules` was being
+   copied into the linux image). Verified: image builds, runs non-root, serves the SPA + deep
+   routes + hashed assets (HTTP 200). `docker-compose.prod.yml` web port is now `80:8080`.
+6. **Web bundle splitting.** `vite.config.ts` `manualChunks` (react/query/charts/ui/http vendors)
+   **plus route-level `React.lazy` + `Suspense`** in `App.tsx`. Entry chunk **318 KB → 35 KB**
+   (9.5 KB gzipped); recharts (366 KB) is no longer in the initial load — it's deferred to the
+   dashboard route. 31 chunks total; largest eager vendor chunk is react at 153 KB.
+7. **README.** Ports confirmed 3007/8001/5173; added **Known limitations** (wall-clock SLA, the 3
+   accepted npm-audit highs, attachments-not-wired, ApprovalStep polymorphic) and **First steps
+   after deploy** (create first real IT_ADMIN, publish 3–5 KB articles before launch, tune
+   REOPEN_WINDOW_DAYS / MAX_DEVICES_PER_EMPLOYEE / REMINDER_CADENCE_DAYS in SystemConfig).
 
 ## Final QA Pass (2026-06-29) — 10-section live audit
 Ran all 10 sections against a live stack. Verdict: **READY TO DEPLOY** (1 blocker found + fixed).

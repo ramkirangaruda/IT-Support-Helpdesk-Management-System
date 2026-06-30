@@ -5,12 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { DeviceRequestStatus, DeviceStatus, RoleName, UserStatus } from '@prisma/client';
+import { DeviceRequestStatus, DeviceStatus, Prisma, RoleName, UserStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginated } from '../common/dto/pagination-query.dto';
 import { AllocateDeviceDto } from './dto/allocate-device.dto';
+import { ListDevicesDto } from './dto/list-devices.dto';
+import { ListDeviceRequestsDto } from './dto/list-device-requests.dto';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { CreateDeviceRequestDto } from './dto/create-device-request.dto';
 import { DecisionValue, DeviceDecisionDto } from './dto/decision.dto';
@@ -90,14 +93,24 @@ export class DevicesService {
     return device;
   }
 
-  async findAllDevices() {
-    // Hard cap to avoid an unbounded full-table scan. Real limit/offset paging is a
-    // follow-up once the register grows past this; 500 covers near-term volumes.
-    return this.prisma.device.findMany({
-      include:  DEVICE_INCLUDE,
-      orderBy:  { createdAt: 'desc' },
-      take:     500,
-    });
+  async findAllDevices(query: ListDevicesDto = {}) {
+    const page  = query.page  ?? 1;
+    const limit = query.limit ?? 20;
+    const where: Prisma.DeviceWhereInput = {
+      ...(query.status && { status: query.status }),
+      ...(query.type   && { type:   query.type }),
+    };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.device.findMany({
+        where,
+        include: DEVICE_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip:    (page - 1) * limit,
+        take:    limit,
+      }),
+      this.prisma.device.count({ where }),
+    ]);
+    return paginated(data, total, page, limit);
   }
 
   async findDevice(id: string) {
@@ -295,11 +308,14 @@ export class DevicesService {
     return request;
   }
 
-  async listRequests(actor: AuthenticatedUser, status?: DeviceRequestStatus) {
+  async listRequests(actor: AuthenticatedUser, query: ListDeviceRequestsDto = {}) {
+    const { status } = query;
+    const page  = query.page  ?? 1;
+    const limit = query.limit ?? 20;
     const isAdmin   = actor.roles.some(r => (r as RoleName) === RoleName.IT_ADMIN || (r as RoleName) === RoleName.SYS_ADMIN);
     const isManager = actor.roles.includes(RoleName.MANAGER);
 
-    let where: Record<string, unknown>;
+    let where: Prisma.DeviceRequestWhereInput;
     if (isAdmin) {
       where = status ? { status } : {};
     } else if (isManager) {
@@ -309,12 +325,17 @@ export class DevicesService {
       where = { requesterId: actor.id, ...(status && { status }) };
     }
 
-    return this.prisma.deviceRequest.findMany({
-      where,
-      include: REQUEST_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      take:    500, // guard against unbounded scan; full paging is a follow-up
-    });
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.deviceRequest.findMany({
+        where,
+        include: REQUEST_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip:    (page - 1) * limit,
+        take:    limit,
+      }),
+      this.prisma.deviceRequest.count({ where }),
+    ]);
+    return paginated(data, total, page, limit);
   }
 
   async getRequest(id: string, actor: AuthenticatedUser) {

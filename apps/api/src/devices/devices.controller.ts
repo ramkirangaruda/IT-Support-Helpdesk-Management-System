@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { DevicesService } from './devices.service';
+import { ListDevicesDto } from './dto/list-devices.dto';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { ReturnDeviceDto } from './dto/return-device.dto';
@@ -21,11 +22,11 @@ export class DevicesController {
     return this.devicesService.getOverdueEmployees();
   }
 
-  // GET /devices — device register (IT_ADMIN, SYS_ADMIN)
+  // GET /devices — device register (IT_ADMIN, SYS_ADMIN), paginated
   @Get()
   @Roles(...ADMIN_ROLES)
-  findAll() {
-    return this.devicesService.findAllDevices();
+  findAll(@Query() query: ListDevicesDto) {
+    return this.devicesService.findAllDevices(query);
   }
 
   // GET /devices/:id

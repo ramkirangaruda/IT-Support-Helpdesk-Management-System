@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import api from '../../api/api';
+import Pagination, { type Paginated } from '../../components/Pagination';
 import Layout from '../../components/Layout';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -309,10 +310,13 @@ export default function DeviceRegisterPage() {
   const [returningDevice, setReturningDevice] = useState<Device | null>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [page, setPage] = useState(1);
 
-  const { data: devices = [], isLoading } = useQuery<Device[]>({
-    queryKey: ['devices'],
-    queryFn: () => api.get<Device[]>('/devices').then(r => r.data),
+  const { data: res, isLoading } = useQuery<Paginated<Device>>({
+    queryKey: ['devices', page, filterStatus, filterType],
+    queryFn: () => api.get<Paginated<Device>>('/devices', {
+      params: { page, limit: 20, ...(filterStatus && { status: filterStatus }), ...(filterType && { type: filterType }) },
+    }).then(r => r.data),
   });
 
   const queryClient = useQueryClient();
@@ -323,11 +327,8 @@ export default function DeviceRegisterPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
   });
 
-  const filtered = devices.filter(d => {
-    if (filterStatus && d.status !== filterStatus) return false;
-    if (filterType && d.type !== filterType) return false;
-    return true;
-  });
+  // Filtering + paging now happen server-side; `filtered` is just the current page.
+  const filtered = res?.data ?? [];
 
   return (
     <Layout>
@@ -349,7 +350,7 @@ export default function DeviceRegisterPage() {
       <div className="flex gap-3 mb-4">
         <select
           value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
+          onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white
                      focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
@@ -362,7 +363,7 @@ export default function DeviceRegisterPage() {
 
         <select
           value={filterType}
-          onChange={e => setFilterType(e.target.value)}
+          onChange={e => { setFilterType(e.target.value); setPage(1); }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white
                      focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
@@ -371,7 +372,7 @@ export default function DeviceRegisterPage() {
         </select>
 
         <span className="ml-auto text-xs text-gray-400 self-center">
-          {filtered.length} device{filtered.length !== 1 ? 's' : ''}
+          {res?.total ?? 0} device{(res?.total ?? 0) !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -459,6 +460,10 @@ export default function DeviceRegisterPage() {
           </table>
         )}
       </div>
+
+      {res && (
+        <Pagination page={res.page} totalPages={res.totalPages} total={res.total} onPageChange={setPage} />
+      )}
 
       {showAdd && <AddDeviceModal onClose={() => setShowAdd(false)} />}
       {returningDevice && (

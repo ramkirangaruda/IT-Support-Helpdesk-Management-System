@@ -102,7 +102,7 @@ function RequestTimeline({ status }: { status: string }) {
 export default function MyDeviceRequestsPage() {
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['my-device-requests'],
-    queryFn: () => api.get<DeviceRequest[]>('/device-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { limit: 100 } }).then(r => r.data.data),
   });
 
   return (

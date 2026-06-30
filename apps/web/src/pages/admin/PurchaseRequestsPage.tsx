@@ -480,7 +480,7 @@ export default function PurchaseRequestsPage() {
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['purchase-requests'],
-    queryFn: () => api.get<PurchaseRequest[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 30_000,
   });
 

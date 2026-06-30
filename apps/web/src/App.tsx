@@ -1,32 +1,37 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import Sidebar from './components/Sidebar';
 import ChatDrawer from './components/ChatDrawer';
 import ProtectedRoute from './components/ProtectedRoute';
 
+// Auth entry points are eager (needed for first paint); everything else is route
+// code-split so the initial bundle stays small and heavy deps (e.g. recharts on the
+// dashboard) load only when their route is visited.
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/admin/DashboardPage';
-import TicketListPage from './pages/tickets/TicketListPage';
-import NewTicketPage from './pages/tickets/NewTicketPage';
-import TicketDetailPage from './pages/tickets/TicketDetailPage';
-import AdminTicketQueuePage from './pages/admin/AdminTicketQueuePage';
-import AssignTicketPage from './pages/admin/AssignTicketPage';
-import AgentQueuePage from './pages/agent/AgentQueuePage';
-import KBListPage from './pages/kb/KBListPage';
-import KBArticlePage from './pages/kb/KBArticlePage';
-import KBEditorPage from './pages/kb/KBEditorPage';
-import DeviceRequestPage from './pages/devices/DeviceRequestPage';
-import MyDeviceRequestsPage from './pages/devices/MyDeviceRequestsPage';
-import DeviceRegisterPage from './pages/admin/DeviceRegisterPage';
-import DeviceRequestQueuePage from './pages/admin/DeviceRequestQueuePage';
-import ManagerApprovalsPage from './pages/manager/ManagerApprovalsPage';
-import PurchaseRequestsPage from './pages/admin/PurchaseRequestsPage';
-import ProcurementPipelinePage from './pages/admin/ProcurementPipelinePage';
-import FinancePurchaseRequestsPage from './pages/finance/FinancePurchaseRequestsPage';
-import FinanceApprovalsPage from './pages/finance/FinanceApprovalsPage';
-import AdminPendingUsersPage from './pages/admin/AdminPendingUsersPage';
-import AdminNotificationsPage from './pages/admin/AdminNotificationsPage';
+
+const DashboardPage             = lazy(() => import('./pages/admin/DashboardPage'));
+const TicketListPage            = lazy(() => import('./pages/tickets/TicketListPage'));
+const NewTicketPage             = lazy(() => import('./pages/tickets/NewTicketPage'));
+const TicketDetailPage          = lazy(() => import('./pages/tickets/TicketDetailPage'));
+const AdminTicketQueuePage      = lazy(() => import('./pages/admin/AdminTicketQueuePage'));
+const AssignTicketPage          = lazy(() => import('./pages/admin/AssignTicketPage'));
+const AgentQueuePage            = lazy(() => import('./pages/agent/AgentQueuePage'));
+const KBListPage                = lazy(() => import('./pages/kb/KBListPage'));
+const KBArticlePage             = lazy(() => import('./pages/kb/KBArticlePage'));
+const KBEditorPage              = lazy(() => import('./pages/kb/KBEditorPage'));
+const DeviceRequestPage         = lazy(() => import('./pages/devices/DeviceRequestPage'));
+const MyDeviceRequestsPage      = lazy(() => import('./pages/devices/MyDeviceRequestsPage'));
+const DeviceRegisterPage        = lazy(() => import('./pages/admin/DeviceRegisterPage'));
+const DeviceRequestQueuePage    = lazy(() => import('./pages/admin/DeviceRequestQueuePage'));
+const ManagerApprovalsPage      = lazy(() => import('./pages/manager/ManagerApprovalsPage'));
+const PurchaseRequestsPage      = lazy(() => import('./pages/admin/PurchaseRequestsPage'));
+const ProcurementPipelinePage   = lazy(() => import('./pages/admin/ProcurementPipelinePage'));
+const FinancePurchaseRequestsPage = lazy(() => import('./pages/finance/FinancePurchaseRequestsPage'));
+const FinanceApprovalsPage      = lazy(() => import('./pages/finance/FinanceApprovalsPage'));
+const AdminPendingUsersPage     = lazy(() => import('./pages/admin/AdminPendingUsersPage'));
+const AdminNotificationsPage    = lazy(() => import('./pages/admin/AdminNotificationsPage'));
 
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
 const AGENT_ROLES    = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
@@ -45,6 +50,7 @@ export default function App() {
       {isAuthenticated && <Sidebar />}
 
       <div className={isAuthenticated ? 'flex-1 overflow-y-auto' : 'w-full'}>
+        <Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}>
         <Routes>
           {/* ── Public ──────────────────────────────────────────────────── */}
           <Route path="/login"    element={<LoginPage />} />
@@ -139,6 +145,7 @@ export default function App() {
             element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />}
           />
         </Routes>
+        </Suspense>
 
         {/* Chat widget — floats bottom-right, unchanged */}
         {isAuthenticated && <ChatDrawer />}

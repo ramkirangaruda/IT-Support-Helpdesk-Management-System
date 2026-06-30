@@ -207,15 +207,15 @@ function AdminDashboard() {
   const { data: procurementPrs = [] } = useQuery<{ id: string; status: string; estCost: string }[]>({
     queryKey: ['dashboard-prs'],
     queryFn:  () =>
-      api.get<{ id: string; status: string; estCost: string }[]>('/purchase-requests').then(r => r.data),
+      api.get<{ data: { id: string; status: string; estCost: string }[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 60_000,
   });
 
   const { data: pendingDeviceReqs = [] } = useQuery<{ id: string }[]>({
     queryKey: ['dashboard-pending-devices'],
     queryFn:  () =>
-      api.get<{ id: string }[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
-        .then(r => r.data),
+      api.get<{ data: { id: string }[] }>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL', limit: 100 } })
+        .then(r => r.data.data),
     refetchInterval: 60_000,
   });
 
@@ -675,7 +675,7 @@ function EmployeeDashboard() {
   });
   const { data: deviceReqs = [] } = useQuery<MyDeviceReq[]>({
     queryKey: ['my-device-reqs-dashboard'],
-    queryFn: () => api.get<MyDeviceReq[]>('/device-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: MyDeviceReq[] }>('/device-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 60_000,
   });
 
@@ -793,13 +793,13 @@ function ManagerDashboard() {
   const { data: deviceReqs = [] } = useQuery<DevReq[]>({
     queryKey: ['mgr-device-reqs'],
     queryFn: () =>
-      api.get<DevReq[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
-        .then(r => r.data),
+      api.get<{ data: DevReq[] }>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL', limit: 100 } })
+        .then(r => r.data.data),
     refetchInterval: 60_000,
   });
   const { data: purchReqs = [] } = useQuery<PurchReq[]>({
     queryKey: ['mgr-purch-reqs'],
-    queryFn: () => api.get<PurchReq[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchReq[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 60_000,
   });
   const { data: ticketsRes } = useQuery<MyTicketsRes>({
@@ -853,7 +853,7 @@ function ManagerDashboard() {
 function FinanceDashboard() {
   const { data: purchReqs = [] } = useQuery<PurchReq[]>({
     queryKey: ['finance-purch-reqs'],
-    queryFn: () => api.get<PurchReq[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchReq[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 60_000,
   });
 

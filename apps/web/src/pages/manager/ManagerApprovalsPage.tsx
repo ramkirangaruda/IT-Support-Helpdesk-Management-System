@@ -106,8 +106,8 @@ function DeviceRequestsTab() {
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['pending-device-approvals'],
     queryFn: () =>
-      api.get<DeviceRequest[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
-        .then(r => r.data),
+      api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL', limit: 100 } })
+        .then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
@@ -234,7 +234,7 @@ function PurchaseRequestsTab() {
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['pending-pr-approvals'],
-    queryFn: () => api.get<PurchaseRequest[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
@@ -392,14 +392,14 @@ export default function ManagerApprovalsPage() {
   const { data: deviceRequests = [] } = useQuery<DeviceRequest[]>({
     queryKey: ['pending-device-approvals'],
     queryFn: () =>
-      api.get<DeviceRequest[]>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL' } })
-        .then(r => r.data),
+      api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { status: 'PENDING_MANAGER_APPROVAL', limit: 100 } })
+        .then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
   const { data: prs = [] } = useQuery<PurchaseRequest[]>({
     queryKey: ['pending-pr-approvals'],
-    queryFn: () => api.get<PurchaseRequest[]>('/purchase-requests').then(r => r.data),
+    queryFn: () => api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
     refetchInterval: 30_000,
   });
 

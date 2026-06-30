@@ -11,6 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationEvent } from '../notifications/notification-job.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginated } from '../common/dto/pagination-query.dto';
 import { TICKET_DETAIL_INCLUDE, TicketStateMachineService } from './ticket-state-machine.service';
 import { TICKET_COMMENT_ADDED, TicketCommentAddedEvent } from './ticket-events';
 import { AddCommentDto } from './dto/add-comment.dto';
@@ -199,7 +200,7 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
 
-    return { data, total, page, limit };
+    return paginated(data, total, page, limit);
   }
 
   // ── 3. FIND ONE ───────────────────────────────────────────────────────────

@@ -115,13 +115,13 @@ model User {
 
   // §3.4 — reporting line for device-request manager scoping
   managerId  String?
-  manager    User?      @relation("UserManager", fields: [managerId], references: [id])
+  manager    User?      @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
   reports    User[]     @relation("UserManager")
 
   // §3.4 — team grouping for Agent/L2-L3 dashboard scope
   teamId     String?
 
-  approvedBy    User?          @relation("UserApprovals", fields: [approvedById], references: [id])
+  approvedBy    User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedUsers User[]         @relation("UserApprovals")
 
   ticketsRaised   Ticket[]        @relation("TicketRequester")
@@ -188,7 +188,7 @@ model SLAPolicy {
   resolutionTargetHours Int
   calendarId            String
 
-  calendar BusinessCalendar @relation(fields: [calendarId], references: [id])
+  calendar BusinessCalendar @relation(fields: [calendarId], references: [id], onDelete: Restrict)
 }
 
 // ─── Ticketing ────────────────────────────────────────────────────────────────
@@ -217,9 +217,9 @@ model Ticket {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  requester     User            @relation("TicketRequester", fields: [requesterId], references: [id])
-  assignee      User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
-  category      Category        @relation(fields: [categoryId], references: [id])
+  requester     User            @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  assignee      User?           @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category      Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   comments      Comment[]
   attachments   Attachment[]
   statusHistory StatusHistory[]
@@ -241,7 +241,7 @@ model Comment {
   createdAt  DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author User   @relation(fields: [authorId], references: [id])
+  author User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
 }
 
 model Attachment {
@@ -266,7 +266,7 @@ model StatusHistory {
   createdAt  DateTime      @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  actor  User?  @relation(fields: [actorId], references: [id])
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
 }
 
 model Notification {
@@ -280,7 +280,7 @@ model Notification {
   retryCount     Int                 @default(0)
   createdAt      DateTime            @default(now())
 
-  ticket Ticket? @relation(fields: [ticketId], references: [id])
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([recipientEmail, status])
   @@index([status])
@@ -295,8 +295,8 @@ model ChatSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User          @relation(fields: [userId], references: [id])
-  ticket   Ticket?       @relation(fields: [ticketId], references: [id])
+  user     User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ticket   Ticket?       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   messages ChatMessage[]
 }
 
@@ -326,7 +326,7 @@ model KBArticle {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  category Category? @relation(fields: [categoryId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 }
 
 // ─── System Config ───────────────────────────────────────────────────────────
@@ -365,8 +365,8 @@ model DeviceRequest {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  requester        User              @relation("DeviceRequestRequester", fields: [requesterId], references: [id])
-  manager          User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id])
+  requester        User              @relation("DeviceRequestRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  manager          User?             @relation("DeviceRequestManager",   fields: [managerId],  references: [id], onDelete: SetNull)
   allocation       DeviceAllocation?
   purchaseRequests PurchaseRequest[]
 
@@ -385,9 +385,9 @@ model DeviceAllocation {
   conditionAtIssue  String
   conditionAtReturn String?
 
-  device   Device         @relation(fields: [deviceId],   references: [id])
-  employee User           @relation("UserDeviceAllocations", fields: [employeeId], references: [id])
-  request  DeviceRequest? @relation(fields: [requestId],  references: [id])
+  device   Device         @relation(fields: [deviceId],   references: [id], onDelete: Restrict)
+  employee User           @relation("UserDeviceAllocations", fields: [employeeId], references: [id], onDelete: Restrict)
+  request  DeviceRequest? @relation(fields: [requestId],  references: [id], onDelete: SetNull)
 
   @@index([employeeId])
   @@index([deviceId])
@@ -400,7 +400,7 @@ model DeviceReminder {
   cycle      Int
   resolved   Boolean  @default(false)
 
-  employee User @relation("UserDeviceReminders", fields: [employeeId], references: [id])
+  employee User @relation("UserDeviceReminders", fields: [employeeId], references: [id], onDelete: Restrict)
 
   @@index([employeeId, sentAt])
 }
@@ -455,9 +455,9 @@ model PurchaseRequest {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  raisedBy      User           @relation("PurchaseRequestRaisedBy", fields: [raisedById], references: [id])
-  deviceRequest DeviceRequest? @relation(fields: [deviceRequestId], references: [id])
-  vendor        Vendor?        @relation(fields: [vendorId], references: [id])
+  raisedBy      User           @relation("PurchaseRequestRaisedBy", fields: [raisedById], references: [id], onDelete: Restrict)
+  deviceRequest DeviceRequest? @relation(fields: [deviceRequestId], references: [id], onDelete: SetNull)
+  vendor        Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 }
 
 model ApprovalStep {
@@ -470,7 +470,11 @@ model ApprovalStep {
   comment    String?
   decidedAt  DateTime         @default(now())
 
-  approver User @relation("ApprovalStepApprover", fields: [approverId], references: [id])
+  // NOTE: parentType/parentId is a POLYMORPHIC reference (DeviceRequest | PurchaseRequest),
+  // not a real foreign key, so onDelete cannot be expressed here. PurchaseRequests are never
+  // deleted via the app; if hard-delete is ever added, approval steps must be cleaned up in
+  // application code (or this table refactored to real FKs). See FIX 4 note in CLAUDE.md.
+  approver User @relation("ApprovalStepApprover", fields: [approverId], references: [id], onDelete: Restrict)
 
   @@index([parentType, parentId])
 }
@@ -487,5 +491,5 @@ model AuditLog {
   after     Json?
   createdAt DateTime @default(now())
 
-  actor User? @relation(fields: [actorId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 }

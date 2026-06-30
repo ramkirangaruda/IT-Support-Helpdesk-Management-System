@@ -114,7 +114,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "80:80"      # terminate TLS at an upstream LB / ingress, or add 443 + certs here
+      - "80:8080"    # container nginx runs non-root and listens on 8080; terminate TLS upstream
     depends_on:
       - api
     mem_limit: 256m

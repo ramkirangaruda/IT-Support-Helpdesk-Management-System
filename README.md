@@ -83,3 +83,34 @@ Three-tier monorepo: React 18 + TypeScript frontend (Vite) → NestJS REST API (
 3. `npm run build --workspace=apps/api && node apps/api/dist/main.js`
 4. `npm run build --workspace=apps/web` — serve `dist/` with nginx or CloudFront
 5. Wire OIDC: `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`
+
+Or use `docker-compose.prod.yml`, which builds all three services (each runs **non-root**),
+keeps the datastores off the host network, and runs `prisma migrate deploy` on bring-up. The
+web container's nginx runs unprivileged on **8080** (mapped to host 80) and proxies `/api` to the
+api service.
+
+## First steps after deploy
+
+1. **Create the first real admin.** Log in as `sysadmin` (seeded), then create/approve your first
+   real `IT_ADMIN` account via `/admin/pending-users`. Don't rely on the seed/test accounts in prod.
+2. **Publish KB articles before launch.** Add at least 3–5 articles covering common IT issues
+   (`/kb` → Manage Articles → publish). The AI chat only deflects against **published** articles —
+   with an empty KB every chat becomes a ticket.
+3. **Tune `SystemConfig`** to your org if the defaults don't fit:
+   - `REOPEN_WINDOW_DAYS` (default **7**) — how long a closed ticket can be reopened.
+   - `MAX_DEVICES_PER_EMPLOYEE` (default **2**) — device-limit reminder threshold.
+   - `REMINDER_CADENCE_DAYS` (default **3**) — days between device-limit reminders.
+
+## Known limitations
+
+- **SLA uses calendar hours, not working hours.** Response/resolution targets count wall-clock
+  time (pause-adjusted for ON_HOLD); a business-calendar/working-hours engine is not yet implemented.
+- **`npm audit` — 3 high findings in admin-only / build-time deps** (accepted risk, monitor for
+  updates): `lodash` via `@bull-board` (the admin-only queue UI), `multer` via
+  `@nestjs/platform-express` (no file-upload routes are exposed), and `picomatch` via the Vite
+  build toolchain (not shipped in the runtime bundle). Fixes require breaking major upgrades.
+- **File attachments are not wired to storage.** The ticket/procurement attachment UI exists, but
+  the storage backend (MinIO/S3) is not configured — uploads won't persist until it is.
+- **`ApprovalStep` uses a polymorphic parent reference** (`parentType`/`parentId`), not a real FK,
+  so its rows aren't cascade-deleted. PurchaseRequests are never hard-deleted today; if that
+  changes, clean up approval steps in application code or refactor the table to real FKs.
