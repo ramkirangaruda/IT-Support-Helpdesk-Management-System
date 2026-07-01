@@ -154,12 +154,12 @@ function eventLabel(event: string): string {
 // ── NavLink classes ───────────────────────────────────────────────────────────
 
 function itemClass(isActive: boolean, collapsed: boolean) {
-  const base = `flex items-center rounded-lg transition-colors group relative ${
+  const base = `flex items-center rounded-xl group relative ${
     collapsed ? 'justify-center px-0 py-2.5 mx-auto w-10 h-10' : 'gap-3 px-3 py-2 w-full'
   }`;
   const state = isActive
-    ? 'bg-indigo-50 text-indigo-700'
-    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900';
+    ? 'bg-indigo-600 text-white shadow-sm'
+    : 'text-ink-soft hover:bg-black/[0.05] hover:text-ink';
   return `${base} ${state}`;
 }
 
@@ -334,22 +334,22 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`flex flex-col flex-shrink-0 h-screen bg-white border-r border-gray-200
-                  transition-all duration-200 ease-in-out z-30
-                  ${collapsed ? 'w-16' : 'w-60'}`}
+      className={`flex flex-col flex-shrink-0 h-screen glass border-r border-hair
+                  transition-all duration-200 ease-apple z-30
+                  ${collapsed ? 'w-16' : 'w-[248px]'}`}
     >
       {/* ── Logo + toggle ───────────────────────────────────────────────── */}
-      <div className={`flex items-center h-14 border-b border-gray-100 flex-shrink-0
-                       ${collapsed ? 'justify-center px-0' : 'justify-between px-4'}`}>
+      <div className={`flex items-center h-16 flex-shrink-0
+                       ${collapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
         {!collapsed && (
-          <span className="font-bold text-indigo-600 text-base tracking-tight select-none">
-            TicketZilla
+          <span className="font-semibold text-ink text-[17px] tracking-tight select-none">
+            Ticket<span className="text-indigo-600">Zilla</span>
           </span>
         )}
         <button
           onClick={toggle}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          className="p-1.5 rounded-lg text-ink-muted hover:bg-black/[0.05] hover:text-ink"
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -360,7 +360,7 @@ export default function Sidebar() {
         {visibleSections.map(section => (
           <div key={section.title} className={collapsed ? 'mb-3' : 'mb-4'}>
             {!collapsed && (
-              <p className="px-3 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest select-none">
+              <p className="px-3 mb-1.5 text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] select-none">
                 {section.title}
               </p>
             )}
@@ -392,21 +392,21 @@ export default function Sidebar() {
       </nav>
 
       {/* ── Notification bell + user info + logout (pinned bottom) ─────── */}
-      <div className={`flex-shrink-0 border-t border-gray-100 ${collapsed ? 'py-2 px-1' : 'py-2 px-3'}`}>
+      <div className={`flex-shrink-0 border-t border-hair ${collapsed ? 'py-2 px-1' : 'py-2.5 px-3'}`}>
         <NotificationBell collapsed={collapsed} />
 
         {!collapsed && (
           <div className="mt-2 mb-1 px-1">
-            <p className="text-xs font-semibold text-gray-800 truncate">{user?.email}</p>
-            <p className="text-[10px] text-gray-400 truncate mt-0.5">{roleLabel}</p>
+            <p className="text-[13px] font-semibold text-ink truncate">{user?.email}</p>
+            <p className="text-[11px] text-ink-muted truncate mt-0.5">{roleLabel}</p>
           </div>
         )}
 
         <button
           onClick={handleLogout}
           title={collapsed ? 'Logout' : undefined}
-          className={`flex items-center rounded-lg text-sm text-gray-500
-                       hover:bg-red-50 hover:text-red-600 transition-colors w-full
+          className={`flex items-center rounded-xl text-sm text-ink-muted
+                       hover:bg-red-50 hover:text-red-600 w-full
                        ${collapsed ? 'justify-center p-2.5 mt-1' : 'gap-2.5 px-3 py-2'}`}
         >
           <LogOut size={16} />

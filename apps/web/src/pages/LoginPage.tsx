@@ -46,15 +46,15 @@ function DevLoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label htmlFor="devEmail" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="devEmail" className="block text-[13px] font-medium text-ink-soft mb-1.5">
           Sign in as
         </label>
         <select
           id="devEmail"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px] text-ink
+                     focus:bg-white focus:border-indigo-300"
         >
           {DEV_USERS.map(u => (
             <option key={u.email} value={u.email}>{u.label}</option>
@@ -74,9 +74,9 @@ function DevLoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white
-                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50
-                   disabled:cursor-not-allowed transition-colors"
+        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white shadow-sm
+                   bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50
+                   disabled:cursor-not-allowed"
       >
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
@@ -120,7 +120,7 @@ function RealLoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className="block text-[13px] font-medium text-ink-soft mb-1.5">
           Email address
         </label>
         <input
@@ -130,14 +130,14 @@ function RealLoginForm() {
           required
           value={email}
           onChange={e => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px]
+                     text-ink placeholder:text-ink-muted focus:bg-white focus:border-indigo-300"
           placeholder="you@company.com"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="password" className="block text-[13px] font-medium text-ink-soft mb-1.5">
           Password
         </label>
         <input
@@ -147,8 +147,8 @@ function RealLoginForm() {
           required
           value={password}
           onChange={e => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px]
+                     text-ink placeholder:text-ink-muted focus:bg-white focus:border-indigo-300"
           placeholder="••••••••••"
         />
       </div>
@@ -162,9 +162,9 @@ function RealLoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white
-                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50
-                   disabled:cursor-not-allowed transition-colors"
+        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white shadow-sm
+                   bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50
+                   disabled:cursor-not-allowed"
       >
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
@@ -191,11 +191,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8">
+    <div className="min-h-screen bg-gradient-to-b from-white via-canvas to-canvas flex items-center justify-center px-4">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg ring-1 ring-black/[0.04] p-9">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">TicketZilla</h1>
-          <p className="text-sm text-gray-500 mt-1">IT Help Desk</p>
+          <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-gradient-to-b from-indigo-500 to-indigo-600
+                          shadow-md flex items-center justify-center">
+            <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+            </svg>
+          </div>
+          <h1 className="text-[26px] font-semibold text-ink tracking-tight">TicketZilla</h1>
+          <p className="text-[15px] text-ink-muted mt-1">Sign in to your workspace</p>
         </div>
 
         {/* Email/password login always available. In dev, the dev-login dropdown is
@@ -205,9 +211,9 @@ export default function LoginPage() {
         {!IS_PROD && (
           <>
             <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-gray-200" />
-              <span className="text-xs text-gray-400 whitespace-nowrap">or dev shortcut</span>
-              <div className="h-px flex-1 bg-gray-200" />
+              <div className="h-px flex-1 bg-hair" />
+              <span className="text-xs text-ink-muted whitespace-nowrap">or dev shortcut</span>
+              <div className="h-px flex-1 bg-hair" />
             </div>
             <DevLoginForm />
           </>

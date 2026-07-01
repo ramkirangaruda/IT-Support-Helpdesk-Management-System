@@ -1,3 +1,61 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-canvas text-ink;
+    /* Apple type is set slightly tight. */
+    letter-spacing: -0.011em;
+  }
+
+  /* Display headings track a touch tighter, like SF Pro Display. */
+  h1, h2, h3 {
+    letter-spacing: -0.021em;
+  }
+
+  /* Refined, subtle focus ring in the accent colour instead of the default. */
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.35);
+    border-radius: 0.5rem;
+  }
+}
+
+@layer components {
+  /* Frosted translucency — Apple's signature material for bars/overlays. */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+@layer utilities {
+  /* Smooth default motion for interactive elements. */
+  a, button {
+    transition: color .2s cubic-bezier(0.28,0.11,0.32,1),
+                background-color .2s cubic-bezier(0.28,0.11,0.32,1),
+                border-color .2s cubic-bezier(0.28,0.11,0.32,1),
+                box-shadow .2s cubic-bezier(0.28,0.11,0.32,1),
+                transform .2s cubic-bezier(0.28,0.11,0.32,1),
+                opacity .2s cubic-bezier(0.28,0.11,0.32,1);
+  }
+}
+
+/* Custom scrollbars — thin and unobtrusive, like macOS overlay scrollbars. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.28); background-clip: content-box; }
