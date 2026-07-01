@@ -199,7 +199,7 @@ export default function LoginPage() {
           dotSize={10}
           gap={18}
           baseColor="#d8dbe4"
-          activeColor="#0a66ff"
+          activeColor="#1e3a8a"
           proximity={120}
           shockRadius={240}
           shockStrength={5}

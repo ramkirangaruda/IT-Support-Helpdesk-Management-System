@@ -23,7 +23,7 @@
   /* Refined, subtle focus ring in the accent colour instead of the default. */
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.35);
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.22);
     border-radius: 0.5rem;
   }
 }

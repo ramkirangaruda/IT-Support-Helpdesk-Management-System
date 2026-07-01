@@ -52,11 +52,11 @@ export default function App() {
       {showPlasma && (
         <div className="pointer-events-none absolute inset-0">
           <Plasma
-            color="#6b8cff"
-            speed={0.7}
+            color="#1e3a8a"
+            speed={0.55}
             direction="pingpong"
             scale={1.05}
-            opacity={0.22}
+            opacity={0.12}
             mouseInteractive={true}
           />
         </div>
