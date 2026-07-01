@@ -13,7 +13,12 @@ import { SendMessageDto } from './dto/send-message.dto';
 
 // Regex to detect confirmation words in the user message
 const CONFIRMATION_RE =
-  /\b(yes|yeah|yep|ok|okay|sure|please|create|go ahead|do it|proceed|confirm|sounds good|submit)\b/i;
+  /\b(yes|yeah|yep|ya|ok|okay|sure|please|create|created|go ahead|do it|proceed|confirm|sounds good|submit)\b/i;
+
+// The user explicitly wants a ticket raised (any phrasing): "raise a ticket",
+// "create/open/log/file a ticket", "have you created the ticket", etc.
+const WANTS_TICKET_RE =
+  /\b(raise|create|created|creating|open|log|logged|make|file|submit|register|new)\b[\s\S]{0,20}\bticket\b|\bticket\b[\s\S]{0,20}\b(please|now|created|create|raise|raised|open)\b/i;
 
 // Regex to detect that the previous AI message was offering to create a ticket
 const DRAFT_OFFERED_RE = /\bticket\b/i;
@@ -87,11 +92,20 @@ export class ChatService {
 
     const alreadyHasTicket = session.ticketId !== null;
     if (!alreadyHasTicket && aiResponse.ticket_draft) {
-      const lastAiMsg = [...priorMessages].reverse().find(m => m.role === ChatRole.ASSISTANT);
-      const draftWasOffered  = lastAiMsg ? DRAFT_OFFERED_RE.test(lastAiMsg.content) : false;
-      const userConfirmed    = CONFIRMATION_RE.test(dto.content);
+      // Look at the whole conversation from the user's side — did they ask to raise a
+      // ticket at any point, or confirm the assistant's offer? Matching a single exact
+      // confirmation phrase was too brittle (e.g. "have you created it" was missed).
+      const allUserText = [
+        ...priorMessages.filter(m => m.role === ChatRole.USER).map(m => m.content),
+        dto.content,
+      ].join('  ');
+      const askedForTicket = WANTS_TICKET_RE.test(allUserText);
 
-      if (draftWasOffered && userConfirmed) {
+      const lastAiMsg = [...priorMessages].reverse().find(m => m.role === ChatRole.ASSISTANT);
+      const aiOfferedTicket = lastAiMsg ? DRAFT_OFFERED_RE.test(lastAiMsg.content) : false;
+      const userConfirmed   = CONFIRMATION_RE.test(dto.content);
+
+      if (askedForTicket || (aiOfferedTicket && userConfirmed)) {
         ticketId = await this.createTicketFromDraft(
           aiResponse.ticket_draft,
           sessionId,
@@ -105,7 +119,10 @@ export class ChatService {
     //    which can hallucinate a fake id (e.g. "ZL-2026-..."). Otherwise show the AI reply.
     const replyContent = ticketId
       ? `✓ Ticket ${ticketId} has been created. You can track it here: ${FRONTEND_URL}/tickets/${ticketId}`
-      : aiResponse.reply;
+      : (alreadyHasTicket && (WANTS_TICKET_RE.test(dto.content) || CONFIRMATION_RE.test(dto.content)))
+        // The user is asking about the ticket again — a ticket already exists for this chat.
+        ? `✓ Ticket ${session.ticketId} has already been created for this chat. You can track it here: ${FRONTEND_URL}/tickets/${session.ticketId}`
+        : aiResponse.reply;
 
     const assistantMsg = await this.prisma.chatMessage.create({
       data: { sessionId, role: ChatRole.ASSISTANT, content: replyContent },

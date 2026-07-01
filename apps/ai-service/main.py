@@ -297,8 +297,12 @@ async def classify(req: ClassifyRequest) -> ClassifyResponse:
 CHAT_SYSTEM = """You are a helpful IT support assistant for TicketZilla.
 Your goal is to resolve IT issues using the knowledge base.
 Be concise, friendly, and technical.
-If you cannot resolve the issue in 2 exchanges, say:
+If you cannot resolve the issue in 2 exchanges, or the user asks to raise a ticket, say:
 "I'll create a support ticket for you so an agent can help."
+
+NEVER invent, state, or confirm a ticket number (e.g. do not say "#Z123456" or "your ticket
+number is ..."). The system creates the ticket and shows the real ticket ID to the user — you
+must not claim a ticket has already been created or make up an ID.
 
 When KB articles are provided in context, prefer their solutions.
 Do NOT make up solutions that aren't in the KB unless they are common IT knowledge.
@@ -363,10 +367,12 @@ async def chat(req: ChatRequest) -> ChatResponse:
         log.error("/chat LLM error: %s", exc)
         reply = "I'm having trouble connecting to the AI service. Please try again or submit a ticket."
 
-    # 5. After 2+ unresolved user turns, include a ticket draft
+    # 5. Include a ticket draft once the issue isn't KB-deflected. Available from the first
+    #    turn so an explicit "raise a ticket" request can be actioned immediately; the backend
+    #    decides whether to actually create the ticket based on the user's intent.
     ticket_draft = None
     user_turns = _count_user_turns(req.history) + 1  # +1 for current message
-    if user_turns >= 2 and not top_similarity > 0.80:
+    if user_turns >= 1 and not top_similarity > 0.80:
         # Derive the ticket subject/description from the user's ORIGINAL issue
         # (their first message), NOT the latest message — which on the confirmation
         # turn is something like "yes, create the ticket" and makes a useless subject.
