@@ -2,92 +2,88 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
-import { computeSlaPercent, formatSlaRemaining, type SlaFields } from '../../lib/sla';
+import { computeSlaPercent, formatSlaRemaining, slaColor, type SlaFields } from '../../lib/sla';
 
 interface TicketRow extends SlaFields {
-  id: string;
-  subject: string;
+  id:       string;
+  subject:  string;
   priority: string;
-  status: string;
+  status:   string;
   category: { id: string; name: string } | null;
 }
 
-interface TicketsResponse {
-  data: TicketRow[];
-  total: number;
-}
+interface TicketsResponse { data: TicketRow[]; total: number }
 
-const PRIORITY_ORDER: Record<string, number> = {
-  CRITICAL: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-};
-
+const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const TERMINAL = new Set(['CLOSED', 'CANCELLED']);
 
-function SlaIndicator({ pct }: { pct: number | null }) {
-  if (pct === null) {
-    return <span className="text-xs text-gray-400">No SLA</span>;
-  }
+const STATUS_STYLES: Record<string, string> = {
+  NEW:         'bg-[#f2f2f7] text-[#6e6e73]',
+  ASSIGNED:    'bg-[#e0f0fe] text-[#0071e3]',
+  IN_PROGRESS: 'bg-[#eef0fb] text-[#3b5cc3]',
+  ON_HOLD:     'bg-[#fef9ec] text-[#b07800]',
+  ESCALATED:   'bg-[#fff2ea] text-[#b45309]',
+  RESOLVED:    'bg-[#eafaf3] text-[#1a7f4b]',
+  REOPENED:    'bg-[#f5f0fd] text-[#7c3aed]',
+};
 
-  let barColor: string;
-  let label: string;
-  let textColor: string;
+const PRIORITY_STYLES: Record<string, string> = {
+  LOW:      'bg-[#f2f2f7] text-[#6e6e73]',
+  MEDIUM:   'bg-[#e0f0fe] text-[#0071e3]',
+  HIGH:     'bg-[#fff2ea] text-[#b45309]',
+  CRITICAL: 'bg-[#fff1f2] text-[#c0392b]',
+};
 
-  if (pct > 50) {
-    barColor = 'bg-green-500';
-    textColor = 'text-green-700';
-    label = `${Math.round(pct)}%`;
-  } else if (pct > 25) {
-    barColor = 'bg-yellow-400';
-    textColor = 'text-yellow-700';
-    label = `${Math.round(pct)}%`;
-  } else if (pct > 0) {
-    barColor = 'bg-red-500';
-    textColor = 'text-red-700';
-    label = `${Math.round(pct)}%`;
-  } else {
-    barColor = 'bg-red-600';
-    textColor = 'text-red-700';
-    label = 'Breached';
-  }
+function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                      ${styleMap[label] ?? 'bg-[#f2f2f7] text-[#6e6e73]'}`}>
+      {label.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function SlaBar({ ticket }: { ticket: SlaFields }) {
+  const pct   = computeSlaPercent(ticket);
+  const color = slaColor(pct);
+  const barCls = color === 'green'  ? 'bg-[#1a7f4b]'
+    : color === 'yellow' ? 'bg-[#b07800]'
+    : color === 'red'    ? 'bg-[#c0392b]'
+    : 'bg-[#d2d2d7]';
+
+  if (pct === null) return <span className="text-xs text-ink-muted">No SLA</span>;
 
   return (
-    <div className="flex items-center gap-2 min-w-[100px]">
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.max(3, pct)}%` }} />
+    <div className="flex items-center gap-1.5 min-w-[100px]">
+      <div className="flex-1 h-1 bg-[#f2f2f7] rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${barCls}`} style={{ width: `${Math.max(3, pct)}%` }} />
       </div>
-      <span className={`text-xs font-semibold ${textColor} w-14 text-right`}>{label}</span>
+      <span className={`text-xs font-medium w-12 text-right tabular-nums
+        ${color === 'green' ? 'text-[#1a7f4b]' : color === 'yellow' ? 'text-[#b07800]' : 'text-[#c0392b]'}`}>
+        {pct <= 0 ? 'Breached' : `${Math.round(pct)}%`}
+      </span>
     </div>
   );
 }
 
-
-const STATUS_STYLES: Record<string, string> = {
-  NEW: 'bg-blue-50 text-blue-700 border border-blue-200',
-  OPEN: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
-  IN_PROGRESS: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-  ON_HOLD: 'bg-gray-100 text-gray-600 border border-gray-200',
-  RESOLVED: 'bg-green-50 text-green-700 border border-green-200',
-  ESCALATED: 'bg-purple-50 text-purple-700 border border-purple-200',
-  REOPENED: 'bg-orange-50 text-orange-700 border border-orange-200',
-  ASSIGNED: 'bg-blue-50 text-blue-600 border border-blue-200',
-};
-
-const PRIORITY_STYLES: Record<string, string> = {
-  LOW: 'bg-gray-100 text-gray-600',
-  MEDIUM: 'bg-blue-100 text-blue-700',
-  HIGH: 'bg-orange-100 text-orange-700',
-  CRITICAL: 'bg-red-100 text-red-700',
-};
+function TableRowSkeleton() {
+  return (
+    <tr className="border-b border-[#f2f2f7] animate-pulse">
+      {[24, 20, 44, 20, 16, 16, 20].map((w, i) => (
+        <td key={i} className="px-4 py-3.5">
+          <div className={`h-4 bg-[#f2f2f7] rounded w-${w}`} />
+        </td>
+      ))}
+    </tr>
+  );
+}
 
 export default function AgentQueuePage() {
   const navigate = useNavigate();
 
   const { data, isLoading, isError } = useQuery<TicketsResponse>({
     queryKey: ['agent-queue'],
-    queryFn: () =>
+    queryFn:  () =>
       api.get<TicketsResponse>('/tickets', { params: { limit: 100 } }).then(r => r.data),
     refetchInterval: 60_000,
   });
@@ -105,95 +101,75 @@ export default function AgentQueuePage() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agent Queue</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-[22px] font-semibold text-ink">Agent Queue</h1>
+          <p className="text-sm text-ink-muted mt-0.5">
             Tickets assigned to you — sorted by SLA urgency
           </p>
         </div>
-        {data && (
-          <span className="text-sm text-gray-500">
+        {!isLoading && (
+          <span className="text-sm text-ink-muted">
             {tickets.length} active ticket{tickets.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {isLoading && (
-          <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-            Loading queue…
-          </div>
-        )}
-
+      <div className="bg-white rounded-xl border border-hair overflow-hidden">
         {isError && (
-          <div className="flex items-center justify-center py-20 text-red-500 text-sm">
+          <div className="flex items-center justify-center py-20 text-[#c0392b] text-sm">
             Failed to load tickets. Please try again.
           </div>
         )}
 
-        {!isLoading && !isError && tickets.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-sm font-medium">Queue is clear</p>
-            <p className="text-xs mt-1">No active tickets assigned to you</p>
-          </div>
-        )}
-
-        {tickets.length > 0 && (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
+        {!isError && (
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-hair">
                 {['SLA', 'Ticket ID', 'Subject', 'Category', 'Priority', 'Status', 'SLA Due'].map(h => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                  >
+                  <th key={h}
+                    className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
+                               uppercase tracking-[0.06em] whitespace-nowrap">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {tickets.map(ticket => {
-                const pct = computeSlaPercent(ticket);
+            <tbody className="divide-y divide-[#f2f2f7]">
+              {isLoading && Array.from({ length: 6 }).map((_, i) => <TableRowSkeleton key={i} />)}
+
+              {!isLoading && tickets.map(ticket => {
+                const pct       = computeSlaPercent(ticket);
                 const isBreached = pct !== null && pct <= 0;
                 return (
                   <tr
                     key={ticket.id}
                     onClick={() => navigate(`/tickets/${ticket.id}`)}
-                    className={`cursor-pointer transition-colors hover:bg-gray-50
-                               ${isBreached ? 'bg-red-50 hover:bg-red-100' : ''}`}
+                    className={`cursor-pointer
+                                ${isBreached
+                                  ? 'border-l-2 border-l-[#c0392b] bg-[#fff7f7] hover:bg-[#fff1f2]'
+                                  : 'hover:bg-[#fafafa]'}`}
                   >
-                    <td className="px-4 py-3 w-40">
-                      <SlaIndicator pct={pct} />
+                    <td className="px-4 py-3.5 w-40">
+                      <SlaBar ticket={ticket} />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">
-                      {ticket.id}
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className="ticket-id">{ticket.id}</span>
                     </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <span className="font-medium text-gray-900 line-clamp-1">{ticket.subject}</span>
+                    <td className="px-4 py-3.5 max-w-xs">
+                      <span className="font-medium text-ink line-clamp-1">{ticket.subject}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
                       {ticket.category?.name ?? '—'}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
-                                        ${PRIORITY_STYLES[ticket.priority] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {ticket.priority}
-                      </span>
+                    <td className="px-4 py-3.5">
+                      <Badge label={ticket.priority} styleMap={PRIORITY_STYLES} />
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold
-                                        ${STATUS_STYLES[ticket.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {ticket.status.replace(/_/g, ' ')}
-                      </span>
+                    <td className="px-4 py-3.5">
+                      <Badge label={ticket.status} styleMap={STATUS_STYLES} />
                     </td>
-                    <td className={`px-4 py-3 text-xs whitespace-nowrap font-medium
-                                    ${isBreached ? 'text-red-600' : 'text-gray-500'}`}>
+                    <td className={`px-4 py-3.5 text-xs whitespace-nowrap font-medium
+                                    ${isBreached ? 'text-[#c0392b]' : 'text-ink-muted'}`}>
                       {formatSlaRemaining(ticket.slaResolutionDue)}
                     </td>
                   </tr>
@@ -201,6 +177,17 @@ export default function AgentQueuePage() {
               })}
             </tbody>
           </table>
+        )}
+
+        {!isLoading && !isError && tickets.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-ink-muted gap-3">
+            <svg className="w-12 h-12 text-[#d2d2d7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm font-medium">Queue is clear</p>
+            <p className="text-xs">No active tickets assigned to you</p>
+          </div>
         )}
       </div>
     </Layout>

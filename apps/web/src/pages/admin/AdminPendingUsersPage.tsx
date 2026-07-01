@@ -23,21 +23,43 @@ interface PendingUser {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 }
 
-// ── Approve panel ────────────────────────────────────────────────────────────
-
-function ApprovePanel({
-  user,
-  onClose,
-}: {
-  user: PendingUser;
-  onClose: () => void;
+function Modal({ title, sub, children, onCancel, disabled }: {
+  title:    string;
+  sub:      string;
+  children: React.ReactNode;
+  onCancel: () => void;
+  disabled: boolean;
 }) {
-  const queryClient = useQueryClient();
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-md p-6">
+        <h2 className="text-base font-semibold text-ink mb-1">{title}</h2>
+        <p className="text-sm text-ink-muted mb-5">{sub}</p>
+        {children}
+        <button
+          onClick={onCancel}
+          disabled={disabled}
+          className="mt-3 w-full py-2 rounded-lg border border-hair text-sm text-ink-soft
+                     hover:bg-[#fafafa] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Approve panel ─────────────────────────────────────────────────────────────
+
+function ApprovePanel({ user, onClose }: { user: PendingUser; onClose: () => void }) {
+  const queryClient    = useQueryClient();
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['EMPLOYEE']);
-  const [error, setError] = useState<string | null>(null);
+  const [error,         setError]         = useState<string | null>(null);
 
   function toggleRole(role: string) {
     setSelectedRoles(prev =>
@@ -46,153 +68,107 @@ function ApprovePanel({
   }
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.post(`/admin/pending-users/${user.id}/approve`, { roles: selectedRoles }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['pending-users'] });
-      onClose();
-    },
+    mutationFn: () => api.post(`/admin/pending-users/${user.id}/approve`, { roles: selectedRoles }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['pending-users'] }); onClose(); },
     onError: (err: unknown) => {
-      const raw =
-        (err as { response?: { data?: { message?: string | string[] } } })
-          ?.response?.data?.message;
+      const raw = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       setError(Array.isArray(raw) ? raw.join('. ') : (raw ?? 'Approval failed'));
     },
   });
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Approve account</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          {user.name} &lt;{user.email}&gt;
-        </p>
-
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-          Assign roles <span className="text-red-500 font-normal">(select at least one)</span>
-        </p>
-        <div className="space-y-2 mb-4">
-          {ALL_ROLES.map(r => (
-            <label key={r.value} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedRoles.includes(r.value)}
-                onChange={() => toggleRole(r.value)}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-gray-700">{r.label}</span>
-            </label>
-          ))}
-        </div>
-
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 mb-4">
-            <p className="text-xs text-red-700">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={selectedRoles.length === 0 || mutation.isPending}
-            className="flex-1 py-2 rounded-lg bg-green-600 text-white text-sm font-medium
-                       hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            {mutation.isPending ? 'Approving…' : 'Approve & Assign Roles'}
-          </button>
-          <button
-            onClick={onClose}
-            disabled={mutation.isPending}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600
-                       hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
+    <Modal
+      title="Approve account"
+      sub={`${user.name} <${user.email}>`}
+      onCancel={onClose}
+      disabled={mutation.isPending}
+    >
+      <p className="text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-2">
+        Assign roles <span className="text-[#c0392b] font-normal">(select at least one)</span>
+      </p>
+      <div className="space-y-2 mb-4">
+        {ALL_ROLES.map(r => (
+          <label key={r.value} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedRoles.includes(r.value)}
+              onChange={() => toggleRole(r.value)}
+              className="rounded border-hair text-indigo-600"
+            />
+            <span className="text-sm text-ink-soft">{r.label}</span>
+          </label>
+        ))}
       </div>
-    </div>
+      {error && (
+        <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 mb-4">
+          <p className="text-xs text-[#c0392b]">{error}</p>
+        </div>
+      )}
+      <button
+        onClick={() => mutation.mutate()}
+        disabled={selectedRoles.length === 0 || mutation.isPending}
+        className="w-full py-2 rounded-lg bg-[#1a7f4b] text-white text-sm font-medium
+                   hover:bg-[#166940] disabled:opacity-50"
+      >
+        {mutation.isPending ? 'Approving…' : 'Approve & Assign Roles'}
+      </button>
+    </Modal>
   );
 }
 
-// ── Reject panel ─────────────────────────────────────────────────────────────
+// ── Reject panel ──────────────────────────────────────────────────────────────
 
-function RejectPanel({
-  user,
-  onClose,
-}: {
-  user: PendingUser;
-  onClose: () => void;
-}) {
+function RejectPanel({ user, onClose }: { user: PendingUser; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
   const [error,  setError]  = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.post(`/admin/pending-users/${user.id}/reject`, { reason }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['pending-users'] });
-      onClose();
-    },
+    mutationFn: () => api.post(`/admin/pending-users/${user.id}/reject`, { reason }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['pending-users'] }); onClose(); },
     onError: (err: unknown) => {
-      const raw =
-        (err as { response?: { data?: { message?: string | string[] } } })
-          ?.response?.data?.message;
+      const raw = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       setError(Array.isArray(raw) ? raw.join('. ') : (raw ?? 'Rejection failed'));
     },
   });
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Reject account</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          {user.name} &lt;{user.email}&gt;
-        </p>
-
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Reason <span className="text-red-500">*</span>
-          <span className="text-gray-400 font-normal text-xs ml-1">(sent to the user)</span>
-        </label>
-        <textarea
-          rows={3}
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          placeholder="e.g. Cannot verify employment status. Please contact IT."
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none mb-4"
-        />
-
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 mb-4">
-            <p className="text-xs text-red-700">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={!reason.trim() || mutation.isPending}
-            className="flex-1 py-2 rounded-lg bg-red-600 text-white text-sm font-medium
-                       hover:bg-red-700 transition-colors disabled:opacity-50"
-          >
-            {mutation.isPending ? 'Rejecting…' : 'Reject Registration'}
-          </button>
-          <button
-            onClick={onClose}
-            disabled={mutation.isPending}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600
-                       hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
+    <Modal
+      title="Reject account"
+      sub={`${user.name} <${user.email}>`}
+      onCancel={onClose}
+      disabled={mutation.isPending}
+    >
+      <label className="block text-sm font-medium text-ink-soft mb-1">
+        Reason <span className="text-[#c0392b]">*</span>
+        <span className="text-ink-muted font-normal text-xs ml-1">(sent to the user)</span>
+      </label>
+      <textarea
+        rows={3}
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="e.g. Cannot verify employment status. Please contact IT."
+        className="w-full rounded-lg border border-hair px-3 py-2 text-sm text-ink
+                   focus:outline-none focus:border-2 focus:border-indigo-600 resize-none mb-4"
+      />
+      {error && (
+        <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 mb-4">
+          <p className="text-xs text-[#c0392b]">{error}</p>
         </div>
-      </div>
-    </div>
+      )}
+      <button
+        onClick={() => mutation.mutate()}
+        disabled={!reason.trim() || mutation.isPending}
+        className="w-full py-2 rounded-lg bg-[#c0392b] text-white text-sm font-medium
+                   hover:bg-[#a83228] disabled:opacity-50"
+      >
+        {mutation.isPending ? 'Rejecting…' : 'Reject Registration'}
+      </button>
+    </Modal>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminPendingUsersPage() {
   const [approving, setApproving] = useState<PendingUser | null>(null);
@@ -200,61 +176,76 @@ export default function AdminPendingUsersPage() {
 
   const { data: users = [], isLoading } = useQuery<PendingUser[]>({
     queryKey: ['pending-users'],
-    queryFn: () => api.get<PendingUser[]>('/admin/pending-users').then(r => r.data),
+    queryFn:  () => api.get<PendingUser[]>('/admin/pending-users').then(r => r.data),
     refetchInterval: 30_000,
   });
 
   return (
     <Layout>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Pending User Approvals</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="mb-8">
+        <h1 className="text-[22px] font-semibold text-ink">Pending User Approvals</h1>
+        <p className="text-sm text-ink-muted mt-0.5">
           Review self-registered accounts. Approving assigns roles and grants login access.
         </p>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Loading…</div>
-      ) : users.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-sm font-medium text-gray-500">No pending registrations</p>
-          <p className="text-xs mt-1">All accounts have been reviewed.</p>
+      {isLoading && (
+        <div className="bg-white rounded-xl border border-hair p-8 animate-pulse">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex gap-4 py-3.5 border-b border-[#f2f2f7] last:border-0">
+              <div className="h-4 w-32 bg-[#f2f2f7] rounded" />
+              <div className="h-4 w-40 bg-[#f2f2f7] rounded" />
+              <div className="h-4 w-20 bg-[#f2f2f7] rounded" />
+            </div>
+          ))}
         </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
+      )}
+
+      {!isLoading && users.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-ink-muted gap-3">
+          <svg className="w-10 h-10 text-[#d2d2d7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm font-medium">No pending registrations</p>
+          <p className="text-xs">All accounts have been reviewed.</p>
+        </div>
+      )}
+
+      {!isLoading && users.length > 0 && (
+        <div className="bg-white rounded-xl border border-hair overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-hair">
                 {['Name', 'Email', 'Department', 'Registered', 'Actions'].map(h => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                  >
+                  <th key={h}
+                    className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
+                               uppercase tracking-[0.06em] whitespace-nowrap">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[#f2f2f7]">
               {users.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{u.name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{u.department ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{formatDate(u.createdAt)}</td>
-                  <td className="px-4 py-3">
+                <tr key={u.id} className="hover:bg-[#fafafa]">
+                  <td className="px-4 py-3.5 font-medium text-ink">{u.name}</td>
+                  <td className="px-4 py-3.5 text-ink-muted text-xs">{u.email}</td>
+                  <td className="px-4 py-3.5 text-ink-muted text-xs">{u.department ?? '—'}</td>
+                  <td className="px-4 py-3.5 text-xs text-ink-muted whitespace-nowrap">{formatDate(u.createdAt)}</td>
+                  <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setApproving(u)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700
-                                   border border-green-200 hover:bg-green-100 transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#eafaf3] text-[#1a7f4b]
+                                   border border-[#a3d9b8] hover:bg-[#d4f0e3]"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => setRejecting(u)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700
-                                   border border-red-200 hover:bg-red-100 transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#fff1f2] text-[#c0392b]
+                                   border border-[#fecdd3] hover:bg-[#ffe4e6]"
                       >
                         Reject
                       </button>
@@ -267,12 +258,8 @@ export default function AdminPendingUsersPage() {
         </div>
       )}
 
-      {approving && (
-        <ApprovePanel user={approving} onClose={() => setApproving(null)} />
-      )}
-      {rejecting && (
-        <RejectPanel user={rejecting} onClose={() => setRejecting(null)} />
-      )}
+      {approving && <ApprovePanel user={approving} onClose={() => setApproving(null)} />}
+      {rejecting && <RejectPanel  user={rejecting} onClose={() => setRejecting(null)} />}
     </Layout>
   );
 }

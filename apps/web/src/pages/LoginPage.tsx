@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/api';
 import { useAuth } from '../auth/useAuth';
-import DotGrid from '../components/DotGrid';
 
-// Seed users — dev-login only (shown when import.meta.env.MODE !== 'production')
 const DEV_USERS = [
   { email: 'employee@test.com', label: 'Test Employee (EMPLOYEE)' },
   { email: 'agent@test.com',    label: 'Test Agent (AGENT)' },
@@ -16,6 +14,10 @@ const DEV_USERS = [
 ];
 
 const IS_PROD = import.meta.env.MODE === 'production';
+
+const inputCls = `w-full rounded-xl border border-hair bg-[#fafafa] px-3.5 py-2.5 text-[15px]
+                  text-ink placeholder:text-ink-muted
+                  focus:outline-none focus:bg-white focus:border-2 focus:border-indigo-600`;
 
 // ── Dev login form ──────────────────────────────────────────────────────────
 
@@ -45,7 +47,7 @@ function DevLoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor="devEmail" className="block text-[13px] font-medium text-ink-soft mb-1.5">
           Sign in as
@@ -54,35 +56,33 @@ function DevLoginForm() {
           id="devEmail"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px] text-ink
-                     focus:bg-white focus:border-indigo-300"
+          className={inputCls}
         >
           {DEV_USERS.map(u => (
             <option key={u.email} value={u.email}>{u.label}</option>
           ))}
         </select>
-        <p className="mt-1.5 text-xs text-gray-400">
+        <p className="mt-1.5 text-xs text-ink-muted">
           Roles are loaded from the database for each user.
         </p>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-4 py-3">
+          <p className="text-sm text-[#c0392b]">{error}</p>
         </div>
       )}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white shadow-sm
-                   bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50
-                   disabled:cursor-not-allowed"
+        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white
+                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
 
-      <p className="text-center text-xs text-gray-400">
+      <p className="text-center text-xs text-ink-muted">
         Development mode only — not available in production
       </p>
     </form>
@@ -131,8 +131,7 @@ function RealLoginForm() {
           required
           value={email}
           onChange={e => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px]
-                     text-ink placeholder:text-ink-muted focus:bg-white focus:border-indigo-300"
+          className={inputCls}
           placeholder="you@company.com"
         />
       </div>
@@ -148,29 +147,27 @@ function RealLoginForm() {
           required
           value={password}
           onChange={e => setPassword(e.target.value)}
-          className="w-full rounded-xl border border-hair bg-canvas/40 px-3.5 py-2.5 text-[15px]
-                     text-ink placeholder:text-ink-muted focus:bg-white focus:border-indigo-300"
+          className={inputCls}
           placeholder="••••••••••"
         />
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-4 py-3">
+          <p className="text-sm text-[#c0392b]">{error}</p>
         </div>
       )}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white shadow-sm
-                   bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50
-                   disabled:cursor-not-allowed"
+        className="w-full py-3 px-4 rounded-xl text-[15px] font-medium text-white
+                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? 'Signing in…' : 'Sign in'}
       </button>
 
-      <p className="text-center text-sm text-gray-500">
+      <p className="text-center text-sm text-ink-muted">
         New to TicketZilla?{' '}
         <Link to="/register" className="text-indigo-600 hover:underline font-medium">
           Create an account
@@ -192,26 +189,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-white via-canvas to-canvas flex items-center justify-center px-4">
-      <div className="absolute inset-0 overflow-hidden">
-        <DotGrid
-          className="opacity-60"
-          dotSize={10}
-          gap={18}
-          baseColor="#d8dbe4"
-          activeColor="#1e3a8a"
-          proximity={120}
-          shockRadius={240}
-          shockStrength={5}
-          resistance={750}
-          returnDuration={1.5}
-        />
-      </div>
-
-      <div className="relative z-10 w-full max-w-sm bg-white rounded-3xl shadow-lg ring-1 ring-black/[0.04] p-9">
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
+      <div className="w-full max-w-sm bg-white rounded-3xl border border-hair p-9">
         <div className="text-center mb-8">
-          <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-gradient-to-b from-indigo-500 to-indigo-600
-                          shadow-md flex items-center justify-center">
+          <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-indigo-600
+                          flex items-center justify-center">
             <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
             </svg>
@@ -220,8 +202,6 @@ export default function LoginPage() {
           <p className="text-[15px] text-ink-muted mt-1">Sign in to your workspace</p>
         </div>
 
-        {/* Email/password login always available. In dev, the dev-login dropdown is
-            also shown below as a shortcut for quickly switching between seed roles. */}
         <RealLoginForm />
 
         {!IS_PROD && (

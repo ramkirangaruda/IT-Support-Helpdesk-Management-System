@@ -58,51 +58,51 @@ const NAV: NavSection[] = [
   {
     title: 'DASHBOARD',
     items: [
-      { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={18} />, exact: true },
+      { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={16} />, exact: true },
     ],
   },
   {
     title: 'TICKETS',
     items: [
-      { label: 'My Tickets',    to: '/tickets',        icon: <Ticket size={18} />,        exact: true },
-      { label: 'My Queue',      to: '/agent/tickets',  icon: <ListTodo size={18} />,      roles: ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'] },
-      { label: 'Triage Queue',  to: '/admin/tickets',  icon: <ClipboardList size={18} />, roles: ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'] },
-      { label: 'New Ticket',    to: '/tickets/new',    icon: <Plus size={18} /> },
+      { label: 'My Tickets',    to: '/tickets',        icon: <Ticket size={16} />,        exact: true },
+      { label: 'My Queue',      to: '/agent/tickets',  icon: <ListTodo size={16} />,      roles: ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Triage Queue',  to: '/admin/tickets',  icon: <ClipboardList size={16} />, roles: ['IT_ADMIN', 'SYS_ADMIN', 'MANAGER'] },
+      { label: 'New Ticket',    to: '/tickets/new',    icon: <Plus size={16} /> },
     ],
   },
   {
     title: 'DEVICES',
     items: [
-      { label: 'My Devices',       to: '/devices/my-requests',   icon: <Monitor size={18} /> },
-      { label: 'Request Device',   to: '/devices/request',       icon: <Package size={18} /> },
-      { label: 'Device Register',  to: '/admin/devices',         icon: <Server size={18} />,        roles: ['IT_ADMIN', 'SYS_ADMIN'] },
-      { label: 'Device Requests',  to: '/admin/device-requests', icon: <ClipboardList size={18} />, roles: ['IT_ADMIN', 'SYS_ADMIN'] },
-      { label: 'Approvals',        to: '/manager/approvals',     icon: <CheckSquare size={18} />,   roles: ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'My Devices',       to: '/devices/my-requests',   icon: <Monitor size={16} /> },
+      { label: 'Request Device',   to: '/devices/request',       icon: <Package size={16} /> },
+      { label: 'Device Register',  to: '/admin/devices',         icon: <Server size={16} />,        roles: ['IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Device Requests',  to: '/admin/device-requests', icon: <ClipboardList size={16} />, roles: ['IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Approvals',        to: '/manager/approvals',     icon: <CheckSquare size={16} />,   roles: ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'] },
     ],
   },
   {
     title: 'PROCUREMENT',
     sectionRoles: ['IT_ADMIN', 'SYS_ADMIN', 'FINANCE'],
     items: [
-      { label: 'Pipeline',          to: '/admin/procurement',  icon: <ShoppingCart size={18} />, roles: ['IT_ADMIN', 'SYS_ADMIN'] },
-      { label: 'Finance Approvals', to: '/finance/approvals',  icon: <CreditCard size={18} />,   roles: ['FINANCE'] },
+      { label: 'Pipeline',          to: '/admin/procurement',  icon: <ShoppingCart size={16} />, roles: ['IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Finance Approvals', to: '/finance/approvals',  icon: <CreditCard size={16} />,   roles: ['FINANCE'] },
     ],
   },
   {
     title: 'KNOWLEDGE BASE',
     items: [
-      { label: 'Browse Articles', to: '/kb',     icon: <BookOpen size={18} />, exact: true },
-      { label: 'Manage Articles', to: '/kb/new', icon: <PenLine size={18} />,  roles: ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Browse Articles', to: '/kb',     icon: <BookOpen size={16} />, exact: true },
+      { label: 'Manage Articles', to: '/kb/new', icon: <PenLine size={16} />,  roles: ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN'] },
     ],
   },
   {
     title: 'ADMINISTRATION',
     sectionRoles: ['IT_ADMIN', 'SYS_ADMIN'],
     items: [
-      { label: 'Pending Users',    to: '/admin/pending-users',  icon: <Users size={18} /> },
-      { label: 'User Management',  to: '/admin/users',          icon: <UserCog size={18} /> },
-      { label: 'Reports',          to: '/dashboard',            icon: <BarChart2 size={18} />, exact: true },
-      { label: 'Notification Log', to: '/admin/notifications',  icon: <Bell size={18} /> },
+      { label: 'Pending Users',    to: '/admin/pending-users',  icon: <Users size={16} /> },
+      { label: 'User Management',  to: '/admin/users',          icon: <UserCog size={16} /> },
+      { label: 'Reports',          to: '/dashboard',            icon: <BarChart2 size={16} />, exact: true },
+      { label: 'Notification Log', to: '/admin/notifications',  icon: <Bell size={16} /> },
     ],
   },
 ];
@@ -111,9 +111,9 @@ const NAV: NavSection[] = [
 
 const ROLE_LABELS: Record<string, string> = {
   EMPLOYEE:  'Employee',
-  AGENT:     'Agent',
+  AGENT:     'Support Agent',
   L2_L3:     'L2/L3 Engineer',
-  IT_ADMIN:  'IT Admin',
+  IT_ADMIN:  'IT Administrator',
   SYS_ADMIN: 'System Admin',
   MANAGER:   'Manager',
   FINANCE:   'Finance',
@@ -151,15 +151,16 @@ function eventLabel(event: string): string {
   return event;
 }
 
-// ── NavLink classes ───────────────────────────────────────────────────────────
+// ── Nav item class ────────────────────────────────────────────────────────────
 
 function itemClass(isActive: boolean, collapsed: boolean) {
-  const base = `flex items-center rounded-xl group relative ${
+  const base = `flex items-center rounded-lg group relative ${
     collapsed ? 'justify-center px-0 py-2.5 mx-auto w-10 h-10' : 'gap-3 px-3 py-2 w-full'
   }`;
+  // Active state: accent color text + semibold weight. No background fill.
   const state = isActive
-    ? 'bg-indigo-600 text-white shadow-sm'
-    : 'text-ink-soft hover:bg-black/[0.05] hover:text-ink';
+    ? 'text-indigo-600 font-semibold'
+    : 'text-ink-muted font-medium hover:bg-black/[0.04] hover:text-ink';
   return `${base} ${state}`;
 }
 
@@ -185,12 +186,9 @@ function NotificationBell({ collapsed }: { collapsed: boolean }) {
     refetchInterval: 30_000,
   });
 
-  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -203,58 +201,56 @@ function NotificationBell({ collapsed }: { collapsed: boolean }) {
       <button
         onClick={() => setOpen(o => !o)}
         title={collapsed ? 'Notifications' : undefined}
-        className={`flex items-center rounded-lg text-sm text-gray-500 hover:bg-gray-100
-                    hover:text-gray-800 transition-colors w-full relative
+        className={`flex items-center rounded-lg text-[13px] font-medium text-ink-muted
+                    hover:bg-black/[0.04] hover:text-ink transition-colors w-full relative
                     ${collapsed ? 'justify-center p-2.5' : 'gap-2.5 px-3 py-2'}`}
       >
         <span className="relative flex-shrink-0">
-          <Bell size={16} />
+          <Bell size={15} />
           {count > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5
+            <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-3.5 px-0.5
                              rounded-full bg-indigo-600 text-white text-[9px] font-bold
                              flex items-center justify-center leading-none">
               {count > 9 ? '9+' : count}
             </span>
           )}
         </span>
-        {!collapsed && <span className="font-medium truncate">Notifications</span>}
+        {!collapsed && <span className="truncate">Notifications</span>}
         {!collapsed && count > 0 && (
-          <span className="ml-auto text-xs text-indigo-600 font-semibold">{count}</span>
+          <span className="ml-auto text-xs text-indigo-600 font-semibold tabular-nums">{count}</span>
         )}
       </button>
 
-      {/* Tooltip when collapsed */}
       {collapsed && (
         <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap
-                         rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0
+                         rounded-md bg-ink px-2 py-1 text-xs text-white opacity-0
                          group-hover:opacity-100 transition-opacity z-50 top-1/2 -translate-y-1/2">
           Notifications
         </span>
       )}
 
-      {/* Dropdown panel */}
       {open && (
-        <div className={`absolute z-50 bg-white border border-gray-200 rounded-xl shadow-lg
+        <div className={`absolute z-50 bg-white border border-hair rounded-xl
                          w-80 max-h-96 overflow-y-auto
                          ${collapsed ? 'left-full ml-2 bottom-0' : 'left-0 bottom-full mb-2'}`}>
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-              Recent Notifications
+          <div className="px-4 py-2.5 border-b border-hair flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-[0.08em]">
+              Recent
             </p>
-            <span className="text-xs text-gray-400">{count} recent</span>
+            <span className="text-[11px] text-ink-muted tabular-nums">{count} unread</span>
           </div>
           {notifications.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-gray-400">
+            <div className="px-4 py-8 text-center text-sm text-ink-muted">
               No notifications yet
             </div>
           ) : (
-            <ul className="divide-y divide-gray-50">
+            <ul className="divide-y divide-[#f2f2f7]">
               {notifications.map(n => (
-                <li key={n.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                <li key={n.id} className="px-4 py-3 hover:bg-[#fafafa] transition-colors">
                   <div className="flex items-start gap-2">
-                    <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-gray-800 leading-snug">
+                      <p className="text-xs font-medium text-ink leading-snug">
                         {eventLabel(n.event)}
                       </p>
                       {n.ticket && (
@@ -268,7 +264,7 @@ function NotificationBell({ collapsed }: { collapsed: boolean }) {
                           <span className="truncate">{n.ticket.subject}</span>
                         </NavLink>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-0.5">{relativeTime(n.createdAt)}</p>
+                      <p className="text-[10px] text-ink-muted mt-0.5">{relativeTime(n.createdAt)}</p>
                     </div>
                   </div>
                 </li>
@@ -331,40 +327,42 @@ export default function Sidebar() {
   }).filter(Boolean) as NavSection[];
 
   const roleLabel = userRoles.map(r => ROLE_LABELS[r] ?? r).join(', ');
+  const initials  = (user?.name ?? user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
     <aside
-      className={`flex flex-col flex-shrink-0 h-screen glass border-r border-hair
-                  transition-all duration-200 ease-apple z-30
-                  ${collapsed ? 'w-16' : 'w-[248px]'}`}
+      className={`flex flex-col flex-shrink-0 h-screen bg-white border-r border-hair z-30
+                  transition-all duration-200 ease-apple
+                  ${collapsed ? 'w-16' : 'w-[240px]'}`}
     >
       {/* ── Logo + toggle ───────────────────────────────────────────────── */}
-      <div className={`flex items-center h-16 flex-shrink-0
-                       ${collapsed ? 'justify-center px-0' : 'justify-between px-5'}`}>
+      <div className={`flex items-center h-14 flex-shrink-0 border-b border-hair
+                       ${collapsed ? 'justify-center px-0' : 'justify-between px-4'}`}>
         {!collapsed && (
-          <span className="font-semibold text-ink text-[17px] tracking-tight select-none">
+          <span className="font-semibold text-ink text-[16px] tracking-tight select-none">
             Ticket<span className="text-indigo-600">Zilla</span>
           </span>
         )}
         <button
           onClick={toggle}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="p-1.5 rounded-lg text-ink-muted hover:bg-black/[0.05] hover:text-ink"
+          className="p-1.5 rounded-md text-ink-muted hover:bg-black/[0.04] hover:text-ink"
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
       {/* ── Nav sections (scrollable) ───────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4">
         {visibleSections.map(section => (
-          <div key={section.title} className={collapsed ? 'mb-3' : 'mb-4'}>
+          <div key={section.title} className={collapsed ? 'mb-4' : 'mb-5'}>
             {!collapsed && (
-              <p className="px-3 mb-1.5 text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] select-none">
+              <p className="px-4 mb-1 text-[10px] font-semibold text-ink-muted uppercase
+                            tracking-[0.08em] select-none">
                 {section.title}
               </p>
             )}
-            <div className={`space-y-0.5 ${collapsed ? 'flex flex-col items-center px-1' : 'px-2'}`}>
+            <div className={`space-y-0.5 ${collapsed ? 'flex flex-col items-center px-1.5' : 'px-2'}`}>
               {section.items.map(item => (
                 <NavLink
                   key={item.to + item.label}
@@ -375,11 +373,11 @@ export default function Sidebar() {
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
                   {!collapsed && (
-                    <span className="text-sm font-medium truncate">{item.label}</span>
+                    <span className="text-[13px] truncate">{item.label}</span>
                   )}
                   {collapsed && (
                     <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap
-                                     rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0
+                                     rounded-md bg-ink px-2 py-1 text-xs text-white opacity-0
                                      group-hover:opacity-100 transition-opacity z-50">
                       {item.label}
                     </span>
@@ -391,26 +389,32 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Notification bell + user info + logout (pinned bottom) ─────── */}
-      <div className={`flex-shrink-0 border-t border-hair ${collapsed ? 'py-2 px-1' : 'py-2.5 px-3'}`}>
+      {/* ── Notification bell + user info + sign out ────────────────────── */}
+      <div className={`flex-shrink-0 border-t border-hair ${collapsed ? 'py-2 px-1.5' : 'py-3 px-2'}`}>
         <NotificationBell collapsed={collapsed} />
 
         {!collapsed && (
-          <div className="mt-2 mb-1 px-1">
-            <p className="text-[13px] font-semibold text-ink truncate">{user?.email}</p>
-            <p className="text-[11px] text-ink-muted truncate mt-0.5">{roleLabel}</p>
+          <div className="mt-3 mb-1 flex items-center gap-2.5 px-1">
+            <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center
+                            justify-center text-xs font-semibold flex-shrink-0 select-none">
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-ink truncate">{user?.name ?? user?.email}</p>
+              <p className="text-[11px] text-ink-muted truncate">{roleLabel}</p>
+            </div>
           </div>
         )}
 
         <button
           onClick={handleLogout}
-          title={collapsed ? 'Logout' : undefined}
-          className={`flex items-center rounded-xl text-sm text-ink-muted
-                       hover:bg-red-50 hover:text-red-600 w-full
-                       ${collapsed ? 'justify-center p-2.5 mt-1' : 'gap-2.5 px-3 py-2'}`}
+          title={collapsed ? 'Sign out' : undefined}
+          className={`flex items-center rounded-lg text-[13px] font-medium text-ink-muted
+                       hover:bg-black/[0.04] hover:text-red-500 w-full mt-1
+                       ${collapsed ? 'justify-center p-2.5' : 'gap-2.5 px-3 py-2'}`}
         >
-          <LogOut size={16} />
-          {!collapsed && <span className="font-medium">Logout</span>}
+          <LogOut size={15} />
+          {!collapsed && <span>Sign out</span>}
         </button>
       </div>
     </aside>
