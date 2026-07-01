@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import Sidebar from './components/Sidebar';
 import ChatDrawer from './components/ChatDrawer';
+import Plasma from './components/Plasma';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Auth entry points are eager (needed for first paint); everything else is route
@@ -42,15 +43,28 @@ const FINANCE_ROLES  = ['FINANCE'];
 
 export default function App() {
   const { user } = useAuth();
+  const location = useLocation();
   const isAuthenticated = !!user;
+  const showPlasma = location.pathname !== '/login';
 
   return (
-    // Authenticated users get sidebar + scrollable content pane.
-    // Unauthenticated pages (login, register) render full-screen without sidebar.
-    <div className={isAuthenticated ? 'flex h-screen overflow-hidden bg-gray-50' : ''}>
+    <div className={isAuthenticated ? 'relative flex h-screen overflow-hidden' : 'relative min-h-screen overflow-hidden'}>
+      {showPlasma && (
+        <div className="pointer-events-none absolute inset-0">
+          <Plasma
+            color="#6b8cff"
+            speed={0.7}
+            direction="pingpong"
+            scale={1.05}
+            opacity={0.22}
+            mouseInteractive={true}
+          />
+        </div>
+      )}
+
       {isAuthenticated && <Sidebar />}
 
-      <div className={isAuthenticated ? 'flex-1 overflow-y-auto' : 'w-full'}>
+      <div className={isAuthenticated ? 'relative z-10 flex-1 overflow-y-auto' : 'relative z-10 w-full'}>
         <Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}>
         <Routes>
           {/* ── Public ──────────────────────────────────────────────────── */}
