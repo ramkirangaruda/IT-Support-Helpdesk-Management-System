@@ -178,15 +178,21 @@ export class TicketsService {
     if (status)   where.status   = status;
     if (priority) where.priority = priority;
 
-    const scope = visibilityScope(actor);
-    if (scope === 'own') {
+    if (query.raisedByMe) {
+      // "My Tickets" — tickets the caller raised, independent of role scope. Always safe
+      // (only ever exposes the caller's own tickets).
       where.requesterId = actor.id;
-    } else if (scope === 'assigned') {
-      where.assigneeId = actor.id;
-    }
-    if (scope === 'all') {
-      if (query.requesterId) where.requesterId = query.requesterId;
-      if (query.assigneeId)  where.assigneeId  = query.assigneeId;
+    } else {
+      const scope = visibilityScope(actor);
+      if (scope === 'own') {
+        where.requesterId = actor.id;
+      } else if (scope === 'assigned') {
+        where.assigneeId = actor.id;
+      }
+      if (scope === 'all') {
+        if (query.requesterId) where.requesterId = query.requesterId;
+        if (query.assigneeId)  where.assigneeId  = query.assigneeId;
+      }
     }
 
     const [data, total] = await this.prisma.$transaction([

@@ -195,12 +195,23 @@ export default function LoginPage() {
       <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">TicketZilla</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            IT Help Desk{IS_PROD ? '' : ' — Dev Login'}
-          </p>
+          <p className="text-sm text-gray-500 mt-1">IT Help Desk</p>
         </div>
 
-        {IS_PROD ? <RealLoginForm /> : <DevLoginForm />}
+        {/* Email/password login always available. In dev, the dev-login dropdown is
+            also shown below as a shortcut for quickly switching between seed roles. */}
+        <RealLoginForm />
+
+        {!IS_PROD && (
+          <>
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs text-gray-400 whitespace-nowrap">or dev shortcut</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+            <DevLoginForm />
+          </>
+        )}
       </div>
     </div>
   );

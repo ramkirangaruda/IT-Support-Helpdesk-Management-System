@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/api';
 
 interface ChatMsg {
@@ -31,6 +32,7 @@ const SendIcon = () => (
 );
 
 export default function ChatDrawer() {
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen]         = useState(false);
   const [sessionId, setSessionId]   = useState<string | null>(null);
   const [messages, setMessages]     = useState<ChatMsg[]>([]);
@@ -86,7 +88,11 @@ export default function ChatDrawer() {
       );
 
       setMessages(prev => [...prev, { role: 'ASSISTANT', content: data.message.content }]);
-      if (data.ticketId)  setTicketId(data.ticketId);
+      if (data.ticketId) {
+        setTicketId(data.ticketId);
+        // Refresh the "My Tickets" list so the chatbot-raised ticket shows immediately.
+        void queryClient.invalidateQueries({ queryKey: ['my-tickets'] });
+      }
       if (data.deflected) setDeflected(true);
     } catch {
       setMessages(prev => [

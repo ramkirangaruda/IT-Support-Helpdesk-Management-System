@@ -123,7 +123,7 @@ function NewPrModal({ onClose }: { onClose: () => void }) {
               {errors.quantity && <p className="text-xs text-red-600 mt-0.5">{errors.quantity.message}</p>}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Est. Cost (£)</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Est. Cost (₹)</label>
               <input {...register('estCost')} type="text" inputMode="decimal" placeholder="999.00"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               {errors.estCost && <p className="text-xs text-red-600 mt-0.5">{errors.estCost.message}</p>}
@@ -209,7 +209,7 @@ function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendo
             {errors.vendorId && <p className="text-xs text-red-600 mt-0.5">{errors.vendorId.message}</p>}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Actual Cost (£)</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Actual Cost (₹)</label>
             <input {...register('actualCost')} type="text" inputMode="decimal"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             {errors.actualCost && <p className="text-xs text-red-600 mt-0.5">{errors.actualCost.message}</p>}
@@ -439,9 +439,9 @@ export default function ProcurementPipelinePage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-center tabular-nums">{pr.quantity}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="font-semibold text-gray-800">£{pr.estCost}</p>
+                      <p className="font-semibold text-gray-800">₹{pr.estCost}</p>
                       {pr.actualCost && pr.actualCost !== pr.estCost && (
-                        <p className="text-xs text-teal-600">Actual: £{pr.actualCost}</p>
+                        <p className="text-xs text-teal-600">Actual: ₹{pr.actualCost}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs font-mono">{pr.budgetCode}</td>

@@ -64,9 +64,10 @@ export default function TicketListPage() {
   const limit = 20;
 
   const { data, isLoading, isError } = useQuery<TicketsResponse>({
-    queryKey: ['tickets', page],
+    queryKey: ['my-tickets', page],
     queryFn: () =>
-      api.get<TicketsResponse>('/tickets', { params: { page, limit } }).then(r => r.data),
+      // "My Tickets" = tickets I raised (incl. chatbot-raised), for every role.
+      api.get<TicketsResponse>('/tickets', { params: { page, limit, raisedByMe: true } }).then(r => r.data),
   });
 
   return (

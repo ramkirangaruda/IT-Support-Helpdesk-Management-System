@@ -346,7 +346,7 @@ function AdminDashboard() {
         />
         <StatCard
           label="Pipeline Value"
-          value={`£${pipelineValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          value={`₹${pipelineValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           sub="active purchase requests"
           highlight="indigo"
         />
@@ -878,7 +878,7 @@ function FinanceDashboard() {
         />
         <StatCard
           label="Active Pipeline Value"
-          value={`£${pipelineValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          value={`₹${pipelineValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           highlight="indigo"
           sub="active purchase requests"
         />

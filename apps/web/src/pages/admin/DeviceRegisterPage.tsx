@@ -170,7 +170,7 @@ function AddDeviceModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Cost (£)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cost (₹)</label>
               <input
                 {...register('cost')}
                 type="number"

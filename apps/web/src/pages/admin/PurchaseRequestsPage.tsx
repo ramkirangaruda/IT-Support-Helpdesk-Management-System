@@ -143,7 +143,7 @@ function NewPrModal({ onClose }: { onClose: () => void }) {
               <FieldError message={errors.quantity?.message} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Est. Cost (£) <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Est. Cost (₹) <span className="text-red-500">*</span></label>
               <input {...register('estCost')} type="text" placeholder="0.00"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               <FieldError message={errors.estCost?.message} />
@@ -238,7 +238,7 @@ function PoModal({ prId, onClose }: { prId: string; onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Actual Cost (£) <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Actual Cost (₹) <span className="text-red-500">*</span></label>
             <input {...register('actualCost')} type="text" placeholder="0.00"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <FieldError message={errors.actualCost?.message} />
@@ -396,8 +396,8 @@ function PrDetailDrawer({
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 ['Quantity',    String(pr.quantity)],
-                ['Est. Cost',   `£${pr.estCost}`],
-                ['Actual Cost', pr.actualCost ? `£${pr.actualCost}` : '—'],
+                ['Est. Cost',   `₹${pr.estCost}`],
+                ['Actual Cost', pr.actualCost ? `₹${pr.actualCost}` : '—'],
                 ['Budget Code', pr.budgetCode],
                 ['PO Number',   pr.poNumber ?? '—'],
                 ['Received',    formatDate(pr.receivedAt)],
@@ -568,7 +568,7 @@ export default function PurchaseRequestsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-600 text-center">{pr.quantity}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">£{pr.estCost}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">₹{pr.estCost}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs font-mono">{pr.budgetCode}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{pr.vendor?.name ?? '—'}</td>
                   <td className="px-4 py-3">

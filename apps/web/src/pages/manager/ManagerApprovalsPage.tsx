@@ -306,7 +306,7 @@ function PurchaseRequestsTab() {
                       <p className="font-medium text-gray-800 line-clamp-2">{pr.itemSpec}</p>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-center tabular-nums">{pr.quantity}</td>
-                    <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">£{pr.estCost}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">₹{pr.estCost}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs font-mono">{pr.budgetCode}</td>
                     <td className="px-4 py-3 text-xs">
                       <p className="font-medium text-gray-800">{pr.raisedBy.name}</p>
