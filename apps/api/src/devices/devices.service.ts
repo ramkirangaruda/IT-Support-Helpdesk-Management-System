@@ -101,7 +101,11 @@ export class DevicesService {
     const where: Prisma.DeviceWhereInput = {
       ...(query.status        && { status:        query.status }),
       ...(query.type          && { type:           query.type }),
-      ...(query.assetCategory && { assetCategory:  query.assetCategory }),
+      ...(query.assetCategory && {
+        assetCategory: query.assetCategory.includes(',')
+          ? { in: query.assetCategory.split(',').map(s => s.trim()) }
+          : query.assetCategory,
+      }),
       ...(query.q && {
         OR: [
           { id:              { contains: query.q, mode: 'insensitive' } },
