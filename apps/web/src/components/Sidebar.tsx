@@ -327,7 +327,7 @@ export default function Sidebar() {
   }).filter(Boolean) as NavSection[];
 
   const roleLabel = userRoles.map(r => ROLE_LABELS[r] ?? r).join(', ');
-  const initials  = (user?.name ?? user?.email ?? '?').charAt(0).toUpperCase();
+  const initials  = (user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
     <aside
@@ -400,7 +400,7 @@ export default function Sidebar() {
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold text-ink truncate">{user?.name ?? user?.email}</p>
+              <p className="text-[12px] font-semibold text-ink truncate">{user?.email}</p>
               <p className="text-[11px] text-ink-muted truncate">{roleLabel}</p>
             </div>
           </div>

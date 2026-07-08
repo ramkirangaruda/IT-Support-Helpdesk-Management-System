@@ -51,15 +51,15 @@ interface Vendor {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
-  RAISED:                    'bg-gray-100 text-gray-600 border-gray-200',
-  PENDING_MANAGER_APPROVAL:  'bg-yellow-50 text-yellow-700 border-yellow-200',
-  MANAGER_APPROVED:          'bg-blue-50 text-blue-700 border-blue-200',
-  PENDING_FINANCE_APPROVAL:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-  FINANCE_APPROVED:          'bg-teal-50 text-teal-700 border-teal-200',
-  PO_RAISED:                 'bg-purple-50 text-purple-700 border-purple-200',
-  RECEIVED:                  'bg-green-50 text-green-700 border-green-200',
-  REJECTED:                  'bg-red-50 text-red-700 border-red-200',
-  ON_HOLD:                   'bg-orange-50 text-orange-700 border-orange-200',
+  RAISED:                    'bg-[#f2f2f7] text-[#6e6e73] border-hair',
+  PENDING_MANAGER_APPROVAL:  'bg-[#fef9ec] text-[#b07800] border-[#f0d870]',
+  MANAGER_APPROVED:          'bg-[#e0f0fe] text-[#0071e3] border-[#b6d8ff]',
+  PENDING_FINANCE_APPROVAL:  'bg-[#eef0fb] text-[#3b5cc3] border-[#c7cef8]',
+  FINANCE_APPROVED:          'bg-[#eafaf3] text-[#1a7f4b] border-[#a3d9b8]',
+  PO_RAISED:                 'bg-[#e0f0fe] text-indigo-600 border-[#b6d8ff]',
+  RECEIVED:                  'bg-[#eafaf3] text-[#1a7f4b] border-[#a3d9b8]',
+  REJECTED:                  'bg-[#fff1f2] text-[#c0392b] border-[#fecdd3]',
+  ON_HOLD:                   'bg-[#fef9ec] text-[#b07800] border-[#f0d870]',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -75,10 +75,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const DECISION_STYLES: Record<string, string> = {
-  APPROVED: 'text-green-700',
-  REJECTED: 'text-red-600',
-  ON_HOLD:  'text-orange-600',
+  APPROVED: 'text-[#1a7f4b]',
+  REJECTED: 'text-[#c0392b]',
+  ON_HOLD:  'text-[#b07800]',
 };
+
+const inputCls =
+  'w-full rounded-lg border border-hair px-3 py-2 text-sm focus:outline-none focus:border-2 focus:border-indigo-600';
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -87,7 +90,24 @@ function formatDate(iso: string | null) {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1 text-xs text-red-600">{message}</p>;
+  return <p className="mt-1 text-xs text-[#c0392b]">{message}</p>;
+}
+
+function DrawerSkeleton() {
+  return (
+    <div className="p-6 space-y-5 animate-pulse">
+      <div className="h-5 w-32 bg-[#f2f2f7] rounded" />
+      <div className="h-6 w-full bg-[#f2f2f7] rounded" />
+      <div className="grid grid-cols-2 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="space-y-1">
+            <div className="h-3 w-16 bg-[#f2f2f7] rounded" />
+            <div className="h-4 w-24 bg-[#f2f2f7] rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── New PR Modal ──────────────────────────────────────────────────────────────
@@ -118,62 +138,72 @@ function NewPrModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">New Purchase Request</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair">
+          <h2 className="text-base font-semibold text-ink">New Purchase Request</h2>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl leading-none">×</button>
         </div>
         <form
           onSubmit={handleSubmit(v => createMutation.mutateAsync(v))}
           className="p-6 space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Item Specification <span className="text-red-500">*</span></label>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Item Specification <span className="text-[#c0392b]">*</span>
+            </label>
             <input {...register('itemSpec')} type="text" placeholder="e.g. Laptop Dell XPS 15 i7"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className={inputCls} />
             <FieldError message={errors.itemSpec?.message} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Quantity <span className="text-red-500">*</span></label>
-              <input {...register('quantity')} type="number" min={1}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Quantity <span className="text-[#c0392b]">*</span>
+              </label>
+              <input {...register('quantity')} type="number" min={1} className={inputCls} />
               <FieldError message={errors.quantity?.message} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Est. Cost (₹) <span className="text-red-500">*</span></label>
-              <input {...register('estCost')} type="text" placeholder="0.00"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Est. Cost (₹) <span className="text-[#c0392b]">*</span>
+              </label>
+              <input {...register('estCost')} type="text" placeholder="0.00" className={inputCls} />
               <FieldError message={errors.estCost?.message} />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Budget Code <span className="text-red-500">*</span></label>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Budget Code <span className="text-[#c0392b]">*</span>
+            </label>
             <input {...register('budgetCode')} type="text" placeholder="e.g. IT-CAPEX-2026"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className={inputCls} />
             <FieldError message={errors.budgetCode?.message} />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Linked Device Request ID <span className="text-gray-400 font-normal">(optional)</span></label>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Linked Device Request ID{' '}
+              <span className="normal-case text-ink-muted font-normal">(optional)</span>
+            </label>
             <input {...register('deviceRequestId')} type="text" placeholder="cuid…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className={inputCls} />
           </div>
 
           {createMutation.isError && (
-            <p className="text-xs text-red-600">Failed to create request. Please try again.</p>
+            <p className="text-xs text-[#c0392b]">Failed to create request. Please try again.</p>
           )}
 
           <div className="flex gap-3 pt-1">
             <button type="submit" disabled={createMutation.isPending}
-              className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50">
+              className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
+                         hover:bg-indigo-700 disabled:opacity-50">
               {createMutation.isPending ? 'Creating…' : 'Submit for Approval'}
             </button>
             <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]">
               Cancel
             </button>
           </div>
@@ -211,24 +241,27 @@ function PoModal({ prId, onClose }: { prId: string; onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Record Purchase Order</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair">
+          <h2 className="text-base font-semibold text-ink">Record Purchase Order</h2>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit(v => mutation.mutateAsync(v))} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">PO Number <span className="text-red-500">*</span></label>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              PO Number <span className="text-[#c0392b]">*</span>
+            </label>
             <input {...register('poNumber')} type="text" placeholder="PO-2026-XXXX"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className={inputCls} />
             <FieldError message={errors.poNumber?.message} />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Vendor <span className="text-red-500">*</span></label>
-            <select {...register('vendorId')}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Vendor <span className="text-[#c0392b]">*</span>
+            </label>
+            <select {...register('vendorId')} className={`${inputCls} bg-white`}>
               <option value="">Select vendor…</option>
               {vendors.filter(v => v.active).map(v => (
                 <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
@@ -238,21 +271,23 @@ function PoModal({ prId, onClose }: { prId: string; onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Actual Cost (₹) <span className="text-red-500">*</span></label>
-            <input {...register('actualCost')} type="text" placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Actual Cost (₹) <span className="text-[#c0392b]">*</span>
+            </label>
+            <input {...register('actualCost')} type="text" placeholder="0.00" className={inputCls} />
             <FieldError message={errors.actualCost?.message} />
           </div>
 
-          {mutation.isError && <p className="text-xs text-red-600">Failed. Please try again.</p>}
+          {mutation.isError && <p className="text-xs text-[#c0392b]">Failed. Please try again.</p>}
 
           <div className="flex gap-3">
             <button type="submit" disabled={mutation.isPending}
-              className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+              className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
+                         hover:bg-indigo-700 disabled:opacity-50">
               {mutation.isPending ? 'Saving…' : 'Record PO'}
             </button>
             <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]">
               Cancel
             </button>
           </div>
@@ -290,55 +325,64 @@ function ReceiveModal({ prId, itemSpec, onClose }: { prId: string; itemSpec: str
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Record Receipt</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair">
+          <h2 className="text-base font-semibold text-ink">Record Receipt</h2>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl leading-none">×</button>
         </div>
         <div className="px-6 pt-3 pb-1">
-          <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-            Item: <span className="font-medium text-gray-700">{itemSpec}</span>
+          <p className="text-xs bg-[#fafafa] rounded-lg px-3 py-2 border border-hair text-ink-muted">
+            Item: <span className="font-medium text-ink-soft">{itemSpec}</span>
           </p>
         </div>
         <form onSubmit={handleSubmit(v => mutation.mutateAsync(v))} className="px-6 pb-6 space-y-4 mt-3">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Device Type <span className="text-red-500">*</span></label>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Device Type <span className="text-[#c0392b]">*</span>
+              </label>
               <input {...register('type')} type="text" placeholder="e.g. Laptop"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className={inputCls} />
               <FieldError message={errors.type?.message} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Make / Model</label>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Make / Model
+              </label>
               <input {...register('makeModel')} type="text" placeholder="e.g. Dell XPS 15"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className={inputCls} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Serial Number <span className="text-red-500">*</span></label>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Serial Number <span className="text-[#c0392b]">*</span>
+              </label>
               <input {...register('serialNumber')} type="text" placeholder="SN-XXXXXXX"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className={inputCls} />
               <FieldError message={errors.serialNumber?.message} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Condition</label>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Condition
+              </label>
               <input {...register('condition')} type="text" placeholder="e.g. New"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className={inputCls} />
             </div>
           </div>
 
-          {mutation.isError && <p className="text-xs text-red-600">Failed. Please try again.</p>}
+          {mutation.isError && <p className="text-xs text-[#c0392b]">Failed. Please try again.</p>}
 
           <div className="flex gap-3">
             <button type="submit" disabled={mutation.isPending}
-              className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+              className="px-5 py-2 rounded-lg bg-[#1a7f4b] text-white text-sm font-medium
+                         hover:bg-[#166940] disabled:opacity-50">
               {mutation.isPending ? 'Registering…' : 'Confirm Receipt & Register Device'}
             </button>
             <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]">
               Cancel
             </button>
           </div>
@@ -369,30 +413,27 @@ function PrDetailDrawer({
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white shadow-2xl flex flex-col h-full overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="text-base font-semibold text-gray-900">Purchase Request</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+      <div className="relative w-full max-w-lg bg-white border-l border-hair flex flex-col h-full overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair sticky top-0 bg-white z-10">
+          <h2 className="text-base font-semibold text-ink">Purchase Request</h2>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl">×</button>
         </div>
 
-        {isLoading && (
-          <div className="flex items-center justify-center flex-1 text-gray-400 text-sm">Loading…</div>
-        )}
+        {isLoading && <DrawerSkeleton />}
 
         {pr && (
           <div className="p-6 space-y-5">
-            {/* Header */}
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-mono text-xs text-indigo-600 font-semibold">{pr.id}</p>
-                <h3 className="text-lg font-semibold text-gray-900 mt-0.5">{pr.itemSpec}</h3>
+                <h3 className="text-lg font-semibold text-ink mt-0.5">{pr.itemSpec}</h3>
               </div>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${STATUS_STYLES[pr.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border whitespace-nowrap
+                ${STATUS_STYLES[pr.status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
                 {STATUS_LABEL[pr.status] ?? pr.status}
               </span>
             </div>
 
-            {/* Details grid */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 ['Quantity',    String(pr.quantity)],
@@ -405,39 +446,41 @@ function PrDetailDrawer({
                 ['Vendor',      pr.vendor?.name ?? '—'],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <p className="text-xs text-gray-400 font-medium">{label}</p>
-                  <p className="text-gray-800 font-medium">{value}</p>
+                  <p className="text-xs text-ink-muted font-medium">{label}</p>
+                  <p className="text-ink-soft font-medium">{value}</p>
                 </div>
               ))}
             </div>
 
-            {/* Linked device request */}
             {pr.deviceRequest && (
-              <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs">
-                <p className="font-semibold text-blue-700 mb-1">Linked Device Request</p>
-                <p className="text-blue-600">{pr.deviceRequest.deviceType} — {pr.deviceRequest.requester.name}</p>
-                <p className="text-blue-400 font-mono mt-0.5">{pr.deviceRequest.id}</p>
+              <div className="rounded-lg bg-[#e0f0fe] border border-[#b6d8ff] px-4 py-3 text-xs">
+                <p className="font-semibold text-indigo-700 mb-1">Linked Device Request</p>
+                <p className="text-indigo-600">
+                  {pr.deviceRequest.deviceType} — {pr.deviceRequest.requester.name}
+                </p>
+                <p className="text-indigo-400 font-mono mt-0.5">{pr.deviceRequest.id}</p>
               </div>
             )}
 
-            {/* Approval trail */}
             {(pr.approvalSteps?.length ?? 0) > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Approval Trail</p>
+                <p className="text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-2">
+                  Approval Trail
+                </p>
                 <div className="space-y-2">
                   {pr.approvalSteps!.map(step => (
                     <div key={step.id} className="flex items-start gap-3 text-xs">
-                      <div className={`mt-0.5 font-semibold ${DECISION_STYLES[step.decision] ?? 'text-gray-600'}`}>
+                      <div className={`mt-0.5 font-semibold ${DECISION_STYLES[step.decision] ?? 'text-ink-soft'}`}>
                         {step.decision}
                       </div>
                       <div className="flex-1">
-                        <span className="text-gray-700 font-medium">{step.approver.name}</span>
-                        <span className="text-gray-400 mx-1">·</span>
-                        <span className="text-gray-400">{step.role}</span>
-                        <span className="text-gray-400 mx-1">·</span>
-                        <span className="text-gray-400">{formatDate(step.decidedAt)}</span>
+                        <span className="text-ink-soft font-medium">{step.approver.name}</span>
+                        <span className="text-ink-muted mx-1">·</span>
+                        <span className="text-ink-muted">{step.role}</span>
+                        <span className="text-ink-muted mx-1">·</span>
+                        <span className="text-ink-muted">{formatDate(step.decidedAt)}</span>
                         {step.comment && (
-                          <p className="text-gray-500 mt-0.5 italic">"{step.comment}"</p>
+                          <p className="text-ink-muted mt-0.5 italic">"{step.comment}"</p>
                         )}
                       </div>
                     </div>
@@ -446,17 +489,18 @@ function PrDetailDrawer({
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex flex-col gap-2 pt-2">
               {pr.status === 'FINANCE_APPROVED' && (
                 <button onClick={onPo}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
+                             hover:bg-indigo-700">
                   Record PO
                 </button>
               )}
               {pr.status === 'PO_RAISED' && (
                 <button onClick={onReceive}
-                  className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors">
+                  className="px-4 py-2 rounded-lg bg-[#1a7f4b] text-white text-sm font-medium
+                             hover:bg-[#166940]">
                   Record Receipt & Register Device
                 </button>
               )}
@@ -470,6 +514,21 @@ function PrDetailDrawer({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+function TableSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-hair overflow-hidden animate-pulse">
+      <div className="border-b border-hair h-10" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex gap-4 px-4 py-3.5 border-b border-[#f2f2f7] last:border-0">
+          <div className="h-4 w-24 bg-[#f2f2f7] rounded" />
+          <div className="h-4 flex-1 bg-[#f2f2f7] rounded" />
+          <div className="h-4 w-16 bg-[#f2f2f7] rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PurchaseRequestsPage() {
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -480,7 +539,9 @@ export default function PurchaseRequestsPage() {
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['purchase-requests'],
-    queryFn: () => api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } }).then(r => r.data.data),
+    queryFn: () =>
+      api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } })
+        .then(r => r.data.data),
     refetchInterval: 30_000,
   });
 
@@ -497,26 +558,28 @@ export default function PurchaseRequestsPage() {
     <Layout>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Purchase Requests</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {prs.length} total · {counts['PENDING_MANAGER_APPROVAL'] ?? 0} awaiting manager ·{' '}
-            {counts['PENDING_FINANCE_APPROVAL'] ?? 0} awaiting finance
+          <h1 className="text-[22px] font-semibold text-ink">Purchase Requests</h1>
+          <p className="text-sm text-ink-muted mt-0.5">
+            {prs.length} total · {counts['PENDING_MANAGER_APPROVAL'] ?? 0} pending manager ·{' '}
+            {counts['PENDING_FINANCE_APPROVAL'] ?? 0} pending finance
           </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
         >
           + New Request
         </button>
       </div>
 
       {/* Status filter chips */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-5">
         <button
           onClick={() => setFilterStatus('')}
-          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-            filterStatus === '' ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-500 border-gray-200 hover:border-gray-400'
+          className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+            filterStatus === ''
+              ? 'bg-ink text-white border-ink'
+              : 'text-ink-muted border-hair hover:bg-[#fafafa]'
           }`}
         >
           All ({prs.length})
@@ -525,10 +588,10 @@ export default function PurchaseRequestsPage() {
           <button
             key={key}
             onClick={() => setFilterStatus(key === filterStatus ? '' : key)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
               filterStatus === key
-                ? `${STATUS_STYLES[key] ?? ''} border-current`
-                : 'text-gray-500 border-gray-200 hover:border-gray-400'
+                ? `${STATUS_STYLES[key] ?? ''}`
+                : 'text-ink-muted border-hair hover:bg-[#fafafa]'
             }`}
           >
             {label} ({counts[key]})
@@ -536,53 +599,71 @@ export default function PurchaseRequestsPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {isLoading && (
-          <div className="flex items-center justify-center py-16 text-gray-400 text-sm">Loading…</div>
-        )}
-        {!isLoading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <p className="text-sm font-medium">No purchase requests</p>
-          </div>
-        )}
-        {!isLoading && filtered.length > 0 && (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
+      {isLoading && <TableSkeleton />}
+
+      {!isLoading && filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-hair gap-3">
+          <svg className="w-10 h-10 text-[#d2d2d7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p className="text-sm font-medium text-ink-muted">No purchase requests</p>
+        </div>
+      )}
+
+      {!isLoading && filtered.length > 0 && (
+        <div className="bg-white rounded-xl border border-hair overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-hair">
                 {['Ref', 'Item', 'Qty', 'Est. Cost', 'Budget Code', 'Vendor', 'Status', 'Raised', ''].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  <th key={h}
+                    className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
+                               uppercase tracking-[0.06em] whitespace-nowrap">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[#f2f2f7]">
               {filtered.map(pr => (
-                <tr key={pr.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => setDetailId(pr.id)}>
-                  <td className="px-4 py-3 font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">{pr.id}</td>
-                  <td className="px-4 py-3 max-w-xs">
-                    <span className="font-medium text-gray-800 line-clamp-1">{pr.itemSpec}</span>
+                <tr
+                  key={pr.id}
+                  className="hover:bg-[#fafafa] cursor-pointer"
+                  onClick={() => setDetailId(pr.id)}
+                >
+                  <td className="px-4 py-3.5 font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">
+                    {pr.id}
+                  </td>
+                  <td className="px-4 py-3.5 max-w-xs">
+                    <span className="font-medium text-ink line-clamp-1">{pr.itemSpec}</span>
                     {pr.deviceRequest && (
-                      <span className="text-xs text-blue-500 block">↳ {pr.deviceRequest.deviceType} request</span>
+                      <span className="text-xs text-indigo-600 block">
+                        ↳ {pr.deviceRequest.deviceType} request
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-600 text-center">{pr.quantity}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">₹{pr.estCost}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs font-mono">{pr.budgetCode}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{pr.vendor?.name ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${STATUS_STYLES[pr.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                  <td className="px-4 py-3.5 text-ink-soft text-center tabular-nums">{pr.quantity}</td>
+                  <td className="px-4 py-3.5 text-ink-soft whitespace-nowrap">₹{pr.estCost}</td>
+                  <td className="px-4 py-3.5 text-ink-muted text-xs font-mono">{pr.budgetCode}</td>
+                  <td className="px-4 py-3.5 text-ink-muted text-xs">{pr.vendor?.name ?? '—'}</td>
+                  <td className="px-4 py-3.5">
+                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border
+                      ${STATUS_STYLES[pr.status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
                       {STATUS_LABEL[pr.status] ?? pr.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(pr.createdAt)}</td>
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
+                    {formatDate(pr.createdAt)}
+                  </td>
+                  <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                     <div className="flex gap-1.5">
                       {pr.status === 'FINANCE_APPROVED' && (
                         <button
                           onClick={() => setPoId(pr.id)}
-                          className="px-2.5 py-1 rounded text-xs font-medium bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-colors whitespace-nowrap"
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap
+                                     bg-[#e0f0fe] border border-[#b6d8ff] text-indigo-600
+                                     hover:bg-[#cce5fc]"
                         >
                           PO
                         </button>
@@ -590,7 +671,9 @@ export default function PurchaseRequestsPage() {
                       {pr.status === 'PO_RAISED' && (
                         <button
                           onClick={() => { setReceiveId(pr.id); setReceiveItemSpec(pr.itemSpec); }}
-                          className="px-2.5 py-1 rounded text-xs font-medium bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition-colors whitespace-nowrap"
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap
+                                     bg-[#eafaf3] border border-[#a3d9b8] text-[#1a7f4b]
+                                     hover:bg-[#d6f4e7]"
                         >
                           Receive
                         </button>
@@ -601,10 +684,9 @@ export default function PurchaseRequestsPage() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Modals */}
       {showNew && <NewPrModal onClose={() => setShowNew(false)} />}
       {poId && <PoModal prId={poId} onClose={() => setPoId(null)} />}
       {receiveId && (

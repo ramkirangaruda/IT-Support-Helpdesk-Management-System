@@ -41,15 +41,31 @@ function errMsg(err: unknown, fallback: string) {
   return Array.isArray(raw) ? raw.join('. ') : (raw ?? fallback);
 }
 
+function TableSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-hair overflow-hidden animate-pulse">
+      <div className="border-b border-hair h-10" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-6 px-4 py-3.5 border-b border-[#f2f2f7] last:border-0">
+          <div className="h-4 w-28 bg-[#f2f2f7] rounded" />
+          <div className="h-4 w-36 bg-[#f2f2f7] rounded" />
+          <div className="h-4 w-16 bg-[#f2f2f7] rounded" />
+          <div className="h-4 w-20 bg-[#f2f2f7] rounded ml-auto" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isSysAdmin = !!user?.roles.includes('SYS_ADMIN');
   const assignable = isSysAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.value !== 'SYS_ADMIN');
 
-  const [tab, setTab] = useState<TabKey>('all');
+  const [tab,    setTab]    = useState<TabKey>('all');
   const [picked, setPicked] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [toast,  setToast]  = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   function flash(kind: 'ok' | 'err', text: string) {
     setToast({ kind, text });
@@ -87,23 +103,22 @@ export default function AdminUsersPage() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">User Management</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-[22px] font-semibold text-ink">User Management</h1>
+        <p className="text-sm text-ink-muted mt-0.5">
           Assign roles to users and manage account access. Assigning a role to a pending user grants them login access.
         </p>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
+      {/* Tabs */}
+      <div className="flex gap-0 mb-5 border-b border-hair">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg border border-b-0 transition-colors ${
-              tab === t.key
-                ? 'bg-white border-gray-200 text-indigo-600 -mb-px'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors
+              ${tab === t.key
+                ? 'border-b-2 border-indigo-600 text-indigo-600 -mb-px'
+                : 'text-ink-muted hover:text-ink'}`}
           >
             {t.label}
           </button>
@@ -111,73 +126,89 @@ export default function AdminUsersPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Loading…</div>
+        <TableSkeleton />
       ) : users.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-sm font-medium text-gray-500">No users in this view</p>
+        <div className="flex flex-col items-center justify-center py-20 text-ink-muted gap-2">
+          <svg className="w-10 h-10 text-[#d2d2d7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-sm font-medium">No users in this view</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
+        <div className="bg-white rounded-xl border border-hair overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-hair">
                 {['Name', 'Email', 'Current Role', 'Registered', 'Assign Role', 'Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th key={h}
+                    className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
+                               uppercase tracking-[0.06em] whitespace-nowrap">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[#f2f2f7]">
               {users.map(u => {
-                const isPending  = u.accountStatus === 'PENDING_APPROVAL';
-                const isInactive = u.status !== 'ACTIVE';
-                const isSelf     = u.id === user?.sub;
+                const isPending   = u.accountStatus === 'PENDING_APPROVAL';
+                const isInactive  = u.status !== 'ACTIVE';
+                const isSelf      = u.id === user?.sub;
                 const targetIsSys = u.roles.includes('SYS_ADMIN');
-                const lockedTarget = isSelf || (targetIsSys && !isSysAdmin);
-                const selected = picked[u.id] ?? '';
+                const locked      = isSelf || (targetIsSys && !isSysAdmin);
+                const selected    = picked[u.id] ?? '';
                 return (
-                  <tr key={u.id} className={isPending ? 'bg-amber-50' : isInactive ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {u.name}{isSelf && <span className="ml-1 text-xs text-gray-400">(you)</span>}
+                  <tr
+                    key={u.id}
+                    className={
+                      isPending  ? 'border-l-2 border-l-[#b07800] hover:bg-[#fafafa]' :
+                      isInactive ? 'opacity-60 bg-[#fafafa]' :
+                                   'hover:bg-[#fafafa]'
+                    }
+                  >
+                    <td className="px-4 py-3.5 font-medium text-ink">
+                      {u.name}
+                      {isSelf && <span className="ml-1 text-xs text-ink-muted">(you)</span>}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5 text-xs text-ink-muted">{u.email}</td>
+                    <td className="px-4 py-3.5">
                       {isPending ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
-                          PENDING
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                         bg-[#fef9ec] text-[#b07800] border border-[#f0d870]">
+                          Pending
                         </span>
                       ) : u.roles.length ? (
-                        <span className="text-sm text-gray-700">{u.roles.join(', ')}</span>
+                        <span className="text-sm text-ink-soft">{u.roles.join(', ')}</span>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-ink-muted">—</span>
                       )}
-                      {isInactive && <span className="ml-2 text-xs text-gray-400">(inactive)</span>}
+                      {isInactive && <span className="ml-2 text-xs text-ink-muted">(inactive)</span>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(u.createdAt)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5 text-xs text-ink-muted whitespace-nowrap">{formatDate(u.createdAt)}</td>
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <select
                           value={selected}
-                          disabled={lockedTarget}
+                          disabled={locked}
                           onChange={e => setPicked(p => ({ ...p, [u.id]: e.target.value }))}
-                          className="rounded-lg border border-gray-300 px-2 py-1 text-xs bg-white
-                                     focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
+                          className="rounded-lg border border-hair px-2 py-1.5 text-xs bg-white text-ink
+                                     focus:outline-none focus:border-2 focus:border-indigo-600
+                                     disabled:bg-[#f2f2f7] disabled:text-ink-muted"
                         >
                           <option value="">Select role…</option>
                           {assignable.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                         </select>
                         <button
-                          disabled={!selected || lockedTarget || assignMutation.isPending}
+                          disabled={!selected || locked || assignMutation.isPending}
                           onClick={() => assignMutation.mutate({ id: u.id, role: selected })}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-600 text-white
-                                     hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white
+                                     hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Assign
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       {isSysAdmin && !isSelf && u.status === 'ACTIVE' && (
                         <button
                           onClick={() => {
@@ -186,8 +217,8 @@ export default function AdminUsersPage() {
                             }
                           }}
                           disabled={deactivateMutation.isPending}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-red-50 text-red-700
-                                     border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-40"
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#fff1f2] text-[#c0392b]
+                                     border border-[#fecdd3] hover:bg-[#ffe4e6] disabled:opacity-40"
                         >
                           Deactivate
                         </button>
@@ -201,11 +232,11 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
-          toast.kind === 'ok' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-        }`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium
+          ${toast.kind === 'ok'
+            ? 'bg-[#1a7f4b] text-white'
+            : 'bg-[#c0392b] text-white'}`}>
           {toast.text}
         </div>
       )}

@@ -28,8 +28,11 @@ type FormValues = z.infer<typeof schema>;
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1 text-xs text-red-600">{message}</p>;
+  return <p className="mt-1 text-xs text-[#c0392b]">{message}</p>;
 }
+
+const inputCls = `w-full rounded-lg border border-hair px-3 py-2 text-sm text-ink bg-white
+                  focus:outline-none focus:border-2 focus:border-indigo-600`;
 
 export default function DeviceRequestPage() {
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -56,31 +59,27 @@ export default function DeviceRequestPage() {
     return (
       <Layout>
         <div className="max-w-lg mx-auto pt-10">
-          <div className="bg-white rounded-xl border border-green-200 p-8 text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="bg-white rounded-xl border border-[#a3d9b8] p-8 text-center">
+            <div className="w-12 h-12 bg-[#eafaf3] rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-[#1a7f4b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Request Submitted</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <h2 className="text-[22px] font-semibold text-ink mb-2">Request Submitted</h2>
+            <p className="text-sm text-ink-muted mb-4">
               Your device request has been sent for manager approval.
             </p>
-            <p className="text-xs font-mono text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2 inline-block mb-6">
-              {requestId}
-            </p>
+            <span className="ticket-id inline-block mb-6">{requestId}</span>
             <div className="flex gap-3 justify-center">
               <Link
                 to="/devices/my-requests"
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
-                           hover:bg-indigo-700 transition-colors"
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
               >
                 View My Requests
               </Link>
               <button
                 onClick={() => setRequestId(null)}
-                className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600
-                           hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]"
               >
                 Submit Another
               </button>
@@ -94,31 +93,26 @@ export default function DeviceRequestPage() {
   return (
     <Layout>
       <div className="mb-6">
-        <Link to="/devices/my-requests" className="text-sm text-indigo-600 hover:underline">
+        <Link to="/devices/my-requests" className="text-sm text-ink-muted hover:text-indigo-600">
           ← My Device Requests
         </Link>
       </div>
 
       <div className="max-w-xl">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Request a Device</h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <h1 className="text-[22px] font-semibold text-ink mb-1">Request a Device</h1>
+        <p className="text-sm text-ink-muted mb-6">
           Submit a device request — your manager will be asked to approve it.
         </p>
 
         <form
           onSubmit={handleSubmit(values => createMutation.mutateAsync(values))}
-          className="bg-white rounded-xl border border-gray-200 p-6 space-y-5"
+          className="bg-white rounded-xl border border-hair p-6 space-y-5"
         >
-          {/* Device type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Device Type <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-ink-soft mb-1">
+              Device Type <span className="text-[#c0392b]">*</span>
             </label>
-            <select
-              {...register('deviceType')}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            >
+            <select {...register('deviceType')} className={inputCls}>
               <option value="">Select device type…</option>
               {DEVICE_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -127,22 +121,20 @@ export default function DeviceRequestPage() {
             <FieldError message={errors.deviceType?.message} />
           </div>
 
-          {/* Business justification */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Business Justification <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-ink-soft mb-1">
+              Business Justification <span className="text-[#c0392b]">*</span>
             </label>
             <textarea
               {...register('justification')}
               rows={5}
               placeholder="Explain why you need this device and how it will be used…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+              className={`${inputCls} resize-y`}
             />
             <div className="flex items-center justify-between mt-1">
               <FieldError message={errors.justification?.message} />
               <span className={`text-xs ml-auto ${
-                (justification?.length ?? 0) < 30 ? 'text-amber-600' : 'text-gray-400'
+                (justification?.length ?? 0) < 30 ? 'text-[#b07800]' : 'text-ink-muted'
               }`}>
                 {justification?.length ?? 0}/1000
               </span>
@@ -150,7 +142,7 @@ export default function DeviceRequestPage() {
           </div>
 
           {createMutation.isError && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-4 py-3 text-sm text-[#c0392b]">
               Failed to submit request. Please try again.
             </div>
           )}
@@ -160,14 +152,13 @@ export default function DeviceRequestPage() {
               type="submit"
               disabled={isSubmitting || createMutation.isPending}
               className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
-                         hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                         hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createMutation.isPending ? 'Submitting…' : 'Submit Request'}
             </button>
             <Link
               to="/devices/my-requests"
-              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]"
             >
               Cancel
             </Link>

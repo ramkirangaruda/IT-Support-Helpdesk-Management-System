@@ -20,18 +20,6 @@ interface DeviceRequest {
   } | null;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  SUBMITTED:                'bg-blue-50 text-blue-700 border-blue-200',
-  PENDING_MANAGER_APPROVAL: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  APPROVED:                 'bg-green-50 text-green-700 border-green-200',
-  REJECTED:                 'bg-red-50 text-red-700 border-red-200',
-  PENDING_FULFILMENT:       'bg-indigo-50 text-indigo-700 border-indigo-200',
-  ALLOCATED:                'bg-green-50 text-green-800 border-green-200',
-  RETURN_REQUESTED:         'bg-orange-50 text-orange-700 border-orange-200',
-  RETURNED:                 'bg-gray-100 text-gray-600 border-gray-200',
-  CANCELLED:                'bg-gray-100 text-gray-500 border-gray-200',
-};
-
 const STATUS_LABEL: Record<string, string> = {
   SUBMITTED:                'Submitted',
   PENDING_MANAGER_APPROVAL: 'Pending Approval',
@@ -54,6 +42,13 @@ const TIMELINE: { status: string; label: string }[] = [
 
 const REJECTED_STATUSES = new Set(['REJECTED', 'CANCELLED', 'RETURNED', 'RETURN_REQUESTED']);
 
+const TERMINAL_BADGE: Record<string, string> = {
+  REJECTED:         'bg-[#fff1f2] text-[#c0392b] border-[#fecdd3]',
+  CANCELLED:        'bg-[#f2f2f7] text-[#6e6e73] border-hair',
+  RETURNED:         'bg-[#f2f2f7] text-[#6e6e73] border-hair',
+  RETURN_REQUESTED: 'bg-[#fef9ec] text-[#b07800] border-[#f0d870]',
+};
+
 function statusIndex(s: string) {
   return TIMELINE.findIndex(t => t.status === s);
 }
@@ -67,7 +62,8 @@ function formatDate(iso: string) {
 function RequestTimeline({ status }: { status: string }) {
   if (REJECTED_STATUSES.has(status)) {
     return (
-      <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${STATUS_STYLES[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border
+        ${TERMINAL_BADGE[status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
         {STATUS_LABEL[status] ?? status}
       </span>
     );
@@ -83,14 +79,14 @@ function RequestTimeline({ status }: { status: string }) {
         return (
           <div key={step.status} className="flex items-center gap-1">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
-              done   ? 'bg-green-50 text-green-700 border-green-200'
+              done   ? 'bg-[#eafaf3] text-[#1a7f4b] border-[#a3d9b8]'
               : active ? 'bg-indigo-600 text-white border-indigo-600'
-              : 'bg-gray-50 text-gray-400 border-gray-200'
+              : 'bg-[#f2f2f7] text-[#8e8e93] border-hair'
             }`}>
               {step.label}
             </span>
             {i < TIMELINE.length - 1 && (
-              <span className={`text-xs ${done ? 'text-green-400' : 'text-gray-200'}`}>›</span>
+              <span className={`text-xs ${done ? 'text-[#1a7f4b]' : 'text-[#d2d2d7]'}`}>›</span>
             )}
           </div>
         );
@@ -99,40 +95,63 @@ function RequestTimeline({ status }: { status: string }) {
   );
 }
 
+function CardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-hair p-5 animate-pulse">
+      <div className="flex justify-between mb-3">
+        <div className="space-y-1.5">
+          <div className="h-3 w-24 bg-[#f2f2f7] rounded" />
+          <div className="h-5 w-32 bg-[#f2f2f7] rounded" />
+        </div>
+        <div className="h-3 w-16 bg-[#f2f2f7] rounded" />
+      </div>
+      <div className="h-4 w-full bg-[#f2f2f7] rounded mb-3" />
+      <div className="flex gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-5 w-16 bg-[#f2f2f7] rounded-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MyDeviceRequestsPage() {
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['my-device-requests'],
-    queryFn: () => api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { limit: 100 } }).then(r => r.data.data),
+    queryFn: () =>
+      api.get<{ data: DeviceRequest[] }>('/device-requests', { params: { limit: 100 } })
+        .then(r => r.data.data),
   });
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Device Requests</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track the status of your requests</p>
+          <h1 className="text-[22px] font-semibold text-ink">My Device Requests</h1>
+          <p className="text-sm text-ink-muted mt-0.5">Track the status of your requests</p>
         </div>
         <Link
           to="/devices/request"
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
-                     hover:bg-indigo-700 transition-colors"
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
         >
           + New Request
         </Link>
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Loading…</div>
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
       )}
 
       {!isLoading && requests.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <svg className="w-10 h-10 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex flex-col items-center justify-center py-20 text-ink-muted gap-3">
+          <svg className="w-10 h-10 text-[#d2d2d7]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <p className="text-sm font-medium">No device requests yet</p>
-          <Link to="/devices/request" className="mt-3 text-sm text-indigo-600 hover:underline">
+          <Link to="/devices/request" className="text-sm text-indigo-600 hover:underline">
             Submit your first request
           </Link>
         </div>
@@ -141,39 +160,36 @@ export default function MyDeviceRequestsPage() {
       {!isLoading && requests.length > 0 && (
         <div className="space-y-4">
           {requests.map(req => (
-            <div key={req.id} className="bg-white rounded-xl border border-gray-200 p-5">
+            <div key={req.id} className="bg-white rounded-xl border border-hair p-5">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div>
-                  <span className="font-mono text-xs text-indigo-600 font-semibold">{req.id}</span>
-                  <h3 className="text-base font-semibold text-gray-900 mt-0.5">{req.deviceType}</h3>
+                  <span className="ticket-id">{req.id}</span>
+                  <h3 className="text-base font-semibold text-ink mt-1">{req.deviceType}</h3>
                 </div>
-                <span className="text-xs text-gray-400 whitespace-nowrap mt-1">
+                <span className="text-xs text-ink-muted whitespace-nowrap mt-1">
                   {formatDate(req.createdAt)}
                 </span>
               </div>
 
-              <p className="text-sm text-gray-600 mb-3 line-clamp-2">{req.justification}</p>
-
+              <p className="text-sm text-ink-muted mb-3 line-clamp-2">{req.justification}</p>
               <RequestTimeline status={req.status} />
 
-              {/* Rejection comment */}
               {req.status === 'REJECTED' && req.comment && (
-                <div className="mt-3 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
+                <div className="mt-3 rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 text-xs text-[#c0392b]">
                   <span className="font-semibold">Reason: </span>{req.comment}
                 </div>
               )}
 
-              {/* Allocation info */}
               {req.allocation && (
-                <div className="mt-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-xs text-green-800">
+                <div className="mt-3 rounded-lg bg-[#eafaf3] border border-[#a3d9b8] px-3 py-2 text-xs text-[#1a7f4b]">
                   <span className="font-semibold">Device: </span>
                   {req.allocation.device.id}
                   {req.allocation.device.makeModel ? ` — ${req.allocation.device.makeModel}` : ''}
-                  <span className="text-green-600 ml-3">
+                  <span className="text-[#1a7f4b] opacity-70 ml-3">
                     Allocated {formatDate(req.allocation.allocatedAt)}
                   </span>
                   {req.allocation.returnedOn && (
-                    <span className="text-gray-500 ml-3">
+                    <span className="text-ink-muted ml-3">
                       Returned {formatDate(req.allocation.returnedOn)}
                     </span>
                   )}
