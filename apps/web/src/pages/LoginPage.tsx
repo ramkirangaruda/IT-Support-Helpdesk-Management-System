@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/api';
 import { useAuth } from '../auth/useAuth';
+import DotGrid from '../components/DotGrid';
 
 const DEV_USERS = [
   { email: 'employee@test.com', label: 'Test Employee (EMPLOYEE)' },
@@ -189,8 +190,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-white rounded-3xl border border-hair p-9">
+    <div className="relative min-h-screen overflow-hidden bg-canvas flex items-center justify-center px-4">
+      <div className="absolute inset-0 overflow-hidden">
+        <DotGrid
+          className="opacity-60"
+          dotSize={10}
+          gap={18}
+          baseColor="#d8dbe4"
+          activeColor="#0a66ff"
+          proximity={120}
+          shockRadius={240}
+          shockStrength={5}
+          resistance={750}
+          returnDuration={1.5}
+        />
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm bg-white rounded-3xl shadow-lg ring-1 ring-black/[0.04] p-9">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-indigo-600
                           flex items-center justify-center">

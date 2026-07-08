@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/useAuth';
 import Sidebar from './components/Sidebar';
 import ChatDrawer from './components/ChatDrawer';
+import Plasma from './components/Plasma';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Auth entry points are eager (needed for first paint); everything else is route
@@ -33,6 +34,7 @@ const FinanceApprovalsPage      = lazy(() => import('./pages/finance/FinanceAppr
 const AdminPendingUsersPage     = lazy(() => import('./pages/admin/AdminPendingUsersPage'));
 const AdminUsersPage            = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminNotificationsPage    = lazy(() => import('./pages/admin/AdminNotificationsPage'));
+const ReportsPage               = lazy(() => import('./pages/admin/ReportsPage'));
 
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
 const AGENT_ROLES    = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
@@ -42,13 +44,28 @@ const FINANCE_ROLES  = ['FINANCE'];
 
 export default function App() {
   const { user } = useAuth();
+  const location = useLocation();
   const isAuthenticated = !!user;
+  const showPlasma = location.pathname !== '/login';
 
   return (
-    <div className={isAuthenticated ? 'flex h-screen overflow-hidden bg-canvas' : 'min-h-screen bg-canvas'}>
+    <div className={isAuthenticated ? 'relative flex h-screen overflow-hidden' : 'relative min-h-screen overflow-hidden'}>
+      {showPlasma && (
+        <div className="pointer-events-none absolute inset-0">
+          <Plasma
+            color="#6b8cff"
+            speed={0.7}
+            direction="pingpong"
+            scale={1.05}
+            opacity={0.22}
+            mouseInteractive={true}
+          />
+        </div>
+      )}
+
       {isAuthenticated && <Sidebar />}
 
-      <div className={isAuthenticated ? 'flex-1 overflow-y-auto' : 'w-full'}>
+      <div className={isAuthenticated ? 'relative z-10 flex-1 overflow-y-auto' : 'relative z-10 w-full'}>
         <Suspense fallback={<div className="p-8 text-sm text-ink-muted">Loading…</div>}>
         <Routes>
           {/* ── Public ──────────────────────────────────────────────────── */}
@@ -136,6 +153,10 @@ export default function App() {
           <Route
             path="/admin/notifications"
             element={<ProtectedRoute roles={IT_ADMIN_ROLES}><AdminNotificationsPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/reports"
+            element={<ProtectedRoute roles={IT_ADMIN_ROLES}><ReportsPage /></ProtectedRoute>}
           />
 
           {/* ── Root + catch-all ─────────────────────────────────────────── */}

@@ -101,7 +101,7 @@ const NAV: NavSection[] = [
     items: [
       { label: 'Pending Users',    to: '/admin/pending-users',  icon: <Users size={16} /> },
       { label: 'User Management',  to: '/admin/users',          icon: <UserCog size={16} /> },
-      { label: 'Reports',          to: '/dashboard',            icon: <BarChart2 size={16} />, exact: true },
+      { label: 'Reports',          to: '/admin/reports',        icon: <BarChart2 size={16} /> },
       { label: 'Notification Log', to: '/admin/notifications',  icon: <Bell size={16} /> },
     ],
   },
