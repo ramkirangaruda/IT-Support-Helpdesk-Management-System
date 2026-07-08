@@ -10,4 +10,12 @@ export class ListDevicesDto extends PaginationQueryDto {
   @IsString()
   @IsOptional()
   type?: string;
+
+  @IsString()
+  @IsOptional()
+  assetCategory?: string;
+
+  @IsString()
+  @IsOptional()
+  q?: string;
 }

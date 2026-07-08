@@ -341,15 +341,44 @@ model SystemConfig {
 
 model Device {
   id           String       @id
+  assetNumber  String?      @unique
   type         String
-  makeModel    String
-  serialNumber String       @unique
+  makeModel    String?
+  serialNumber String?      @unique
   status       DeviceStatus @default(AVAILABLE)
   condition    String?
   purchasedOn  DateTime?
   cost         Decimal?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+
+  // Hardware specs
+  cpu           String?
+  ram           String?
+  storage       String?
+  macAddress    String?
+  osVersion     String?
+  osKey         String?
+  antiVirus     String?
+  officeVersion String?
+  officeKey     String?
+
+  // Assignment (text, not FK — from import source)
+  assignedToName    String?
+  assignedToProject String?
+  previousUser      String?
+
+  // Additional
+  assetCategory String?
+  rentedFrom    String?
+  rentedDate    DateTime?
+  returnedDate  DateTime?
+  remarks       String?
+
+  // Import provenance
+  importedFrom  String?
+  importedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   allocations DeviceAllocation[]
 }

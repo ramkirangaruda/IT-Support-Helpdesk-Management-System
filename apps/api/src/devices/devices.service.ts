@@ -19,6 +19,8 @@ import { CreateDeviceRequestDto } from './dto/create-device-request.dto';
 import { DecisionValue, DeviceDecisionDto } from './dto/decision.dto';
 import { ReturnDeviceDto } from './dto/return-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
+import { DeviceImportParser } from './import/device-import.parser';
+import { DevicePreviewRow, ImportResult, ParsedDeviceRow, SheetResult } from './import/device-import.types';
 
 
 const DEVICE_INCLUDE = {
@@ -97,8 +99,18 @@ export class DevicesService {
     const page  = query.page  ?? 1;
     const limit = query.limit ?? 20;
     const where: Prisma.DeviceWhereInput = {
-      ...(query.status && { status: query.status }),
-      ...(query.type   && { type:   query.type }),
+      ...(query.status        && { status:        query.status }),
+      ...(query.type          && { type:           query.type }),
+      ...(query.assetCategory && { assetCategory:  query.assetCategory }),
+      ...(query.q && {
+        OR: [
+          { id:              { contains: query.q, mode: 'insensitive' } },
+          { assetNumber:     { contains: query.q, mode: 'insensitive' } },
+          { makeModel:       { contains: query.q, mode: 'insensitive' } },
+          { serialNumber:    { contains: query.q, mode: 'insensitive' } },
+          { assignedToName:  { contains: query.q, mode: 'insensitive' } },
+        ],
+      }),
     };
     const [data, total] = await this.prisma.$transaction([
       this.prisma.device.findMany({
@@ -501,6 +513,158 @@ export class DevicesService {
     });
 
     return allocation;
+  }
+
+  // ── Excel import ─────────────────────────────────────────────────────────
+
+  async importFromExcel(
+    buffer:   Buffer,
+    filename: string,
+    mode:     'preview' | 'commit',
+    actor:    AuthenticatedUser,
+  ): Promise<ImportResult> {
+    const parser      = new DeviceImportParser();
+    const sheetResult = parser.parse(buffer);
+
+    let devicesCreated = 0;
+    let devicesUpdated = 0;
+    let devicesSkipped = 0;
+    let totalRows      = 0;
+    const sheets: SheetResult[] = [];
+
+    for (const { sheetName, rows, blankRowsSkipped } of sheetResult) {
+      totalRows += rows.length;
+
+      // Classify each row: new | update | error
+      type Classified =
+        | { kind: 'new';    row: ParsedDeviceRow }
+        | { kind: 'update'; row: ParsedDeviceRow; existingId: string }
+        | { kind: 'error';  rowIndex: number; message: string };
+
+      const classified: Classified[] = [];
+      const skipped: SheetResult['skipped'] = [];
+
+      for (const row of rows) {
+        if (row.assetNumber) {
+          const existing = await this.prisma.device.findFirst({
+            where: { assetNumber: { equals: row.assetNumber, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (existing) {
+            classified.push({ kind: 'update', row, existingId: existing.id });
+            skipped.push({ row: row.rowIndex, assetNumber: row.assetNumber, reason: 'Already exists — will update' });
+            continue;
+          }
+        } else if (row.serialNumber) {
+          const existing = await this.prisma.device.findFirst({
+            where: { serialNumber: { equals: row.serialNumber, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (existing) {
+            classified.push({ kind: 'update', row, existingId: existing.id });
+            skipped.push({ row: row.rowIndex, assetNumber: row.serialNumber, reason: 'Already exists (by serial) — will update' });
+            continue;
+          }
+        }
+        classified.push({ kind: 'new', row });
+      }
+
+      const errors: SheetResult['errors'] = [];
+
+      if (mode === 'commit') {
+        for (const item of classified) {
+          if (item.kind === 'error') { devicesSkipped++; continue; }
+
+          const specData = this.rowToSpec(item.row, filename);
+          try {
+            if (item.kind === 'update') {
+              await this.prisma.device.update({ where: { id: item.existingId }, data: specData });
+              await this.audit.log({
+                actorId:  actor.id, entity: 'Device', entityId: item.existingId,
+                action: 'DEVICE_IMPORT_UPDATE', after: { assetNumber: item.row.assetNumber, filename },
+              });
+              devicesUpdated++;
+            } else {
+              const id = await this.generateDeviceId(item.row.type);
+              await this.prisma.device.create({ data: { id, ...specData } });
+              await this.audit.log({
+                actorId: actor.id, entity: 'Device', entityId: id,
+                action: 'DEVICE_IMPORT_CREATE', after: { assetNumber: item.row.assetNumber, filename },
+              });
+              devicesCreated++;
+            }
+          } catch (err) {
+            errors.push({ row: item.row.rowIndex, field: 'assetNumber', message: String(err) });
+            devicesSkipped++;
+          }
+        }
+      }
+
+      const newRows     = classified.filter(c => c.kind === 'new');
+      const updateRows  = classified.filter(c => c.kind === 'update');
+      const preview: DevicePreviewRow[] = (mode === 'commit' ? classified : newRows)
+        .slice(0, 10)
+        .map(c => {
+          const r = (c as { row: ParsedDeviceRow }).row;
+          return {
+            assetNumber:   r.assetNumber,
+            makeModel:     r.makeModel,
+            type:          r.type,
+            status:        r.status,
+            assignedToName: r.assignedToName,
+            cpu:           r.cpu,
+            ram:           r.ram,
+            storage:       r.storage,
+            osVersion:     r.osVersion,
+          };
+        });
+
+      sheets.push({
+        name:         sheetName,
+        rowsFound:    rows.length + blankRowsSkipped,
+        rowsValid:    newRows.length,
+        rowsSkipped:  updateRows.length,
+        rowsErrored:  errors.length,
+        preview,
+        errors,
+        skipped,
+      });
+    }
+
+    return {
+      mode,
+      totalRows,
+      sheets,
+      ...(mode === 'commit' && { devicesCreated, devicesUpdated, devicesSkipped }),
+    };
+  }
+
+  private rowToSpec(row: ParsedDeviceRow, filename: string) {
+    return {
+      assetNumber:      row.assetNumber   ?? null,
+      type:             row.type,
+      makeModel:        row.makeModel     ?? null,
+      serialNumber:     row.serialNumber  ?? null,
+      status:           row.status,
+      cpu:              row.cpu           ?? null,
+      ram:              row.ram           ?? null,
+      storage:          row.storage       ?? null,
+      macAddress:       row.macAddress    ?? null,
+      osVersion:        row.osVersion     ?? null,
+      osKey:            row.osKey         ?? null,
+      antiVirus:        row.antiVirus     ?? null,
+      officeVersion:    row.officeVersion ?? null,
+      officeKey:        row.officeKey     ?? null,
+      assignedToName:   row.assignedToName    ?? null,
+      assignedToProject: row.assignedToProject ?? null,
+      assetCategory:    row.assetCategory ?? null,
+      rentedFrom:       row.rentedFrom    ?? null,
+      rentedDate:       row.rentedDate    ?? null,
+      returnedDate:     row.returnedDate  ?? null,
+      remarks:          row.remarks       ?? null,
+      importedFrom:     filename,
+      importedAt:       new Date(),
+    };
   }
 
   // ── Notification helpers ──────────────────────────────────────────────────

@@ -35,6 +35,7 @@ const AdminPendingUsersPage     = lazy(() => import('./pages/admin/AdminPendingU
 const AdminUsersPage            = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminNotificationsPage    = lazy(() => import('./pages/admin/AdminNotificationsPage'));
 const ReportsPage               = lazy(() => import('./pages/admin/ReportsPage'));
+const DeviceImportPage          = lazy(() => import('./pages/admin/DeviceImportPage'));
 
 const IT_ADMIN_ROLES = ['IT_ADMIN', 'SYS_ADMIN'];
 const AGENT_ROLES    = ['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN', 'MANAGER'];
@@ -111,6 +112,10 @@ export default function App() {
           <Route
             path="/admin/devices"
             element={<ProtectedRoute roles={IT_ADMIN_ROLES}><DeviceRegisterPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/devices/import"
+            element={<ProtectedRoute roles={IT_ADMIN_ROLES}><DeviceImportPage /></ProtectedRoute>}
           />
           <Route
             path="/admin/device-requests"

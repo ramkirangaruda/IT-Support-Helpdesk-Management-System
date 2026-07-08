@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,13 +10,33 @@ import Layout from '../../components/Layout';
 
 interface Device {
   id: string;
+  assetNumber: string | null;
   type: string;
   makeModel: string | null;
-  serialNumber: string;
+  serialNumber: string | null;
   status: string;
   condition: string | null;
   purchasedOn: string | null;
   cost: string | null;
+  // spec fields
+  cpu: string | null;
+  ram: string | null;
+  storage: string | null;
+  macAddress: string | null;
+  osVersion: string | null;
+  osKey: string | null;
+  antiVirus: string | null;
+  officeVersion: string | null;
+  officeKey: string | null;
+  assignedToName: string | null;
+  assignedToProject: string | null;
+  assetCategory: string | null;
+  rentedFrom: string | null;
+  rentedDate: string | null;
+  returnedDate: string | null;
+  remarks: string | null;
+  importedFrom: string | null;
+  importedAt: string | null;
   allocations: Array<{
     id: string;
     returnedOn: string | null;
@@ -272,17 +293,98 @@ function TableRowSkeleton() {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+// ── Spec details panel ────────────────────────────────────────────────────────
+
+function SpecRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div className="flex gap-2">
+      <span className="text-[11px] text-ink-muted w-32 flex-shrink-0">{label}</span>
+      <span className="text-[11px] text-ink font-medium break-all">{value}</span>
+    </div>
+  );
+}
+
+function DeviceSpecPanel({ device }: { device: Device }) {
+  const hasSpec = device.cpu || device.ram || device.storage || device.macAddress ||
+                  device.osVersion || device.antiVirus || device.officeVersion;
+  const hasAssign = device.assignedToName || device.assignedToProject || device.rentedFrom;
+  const hasMeta   = device.remarks || device.importedFrom;
+
+  return (
+    <tr>
+      <td colSpan={9} className="px-4 py-4 bg-[#fafafa] border-b border-hair">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {hasSpec && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-[0.06em] mb-2">Hardware</p>
+              <SpecRow label="CPU"         value={device.cpu} />
+              <SpecRow label="RAM"         value={device.ram} />
+              <SpecRow label="Storage"     value={device.storage} />
+              <SpecRow label="MAC Address" value={device.macAddress} />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-[0.06em] mb-2">Software</p>
+            <SpecRow label="OS"           value={device.osVersion} />
+            <SpecRow label="OS Key"       value={device.osKey} />
+            <SpecRow label="Antivirus"    value={device.antiVirus} />
+            <SpecRow label="Office"       value={device.officeVersion} />
+            <SpecRow label="Office Key"   value={device.officeKey} />
+          </div>
+          {hasAssign && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-[0.06em] mb-2">Assignment</p>
+              <SpecRow label="Assigned To" value={device.assignedToName} />
+              <SpecRow label="Department"  value={device.assignedToProject} />
+              <SpecRow label="Rented From" value={device.rentedFrom} />
+              <SpecRow label="Asset No."   value={device.assetNumber} />
+            </div>
+          )}
+          {hasMeta && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-[0.06em] mb-2">Notes</p>
+              <SpecRow label="Remarks"     value={device.remarks} />
+              <SpecRow label="Imported"    value={device.importedFrom} />
+              <SpecRow label="Import date" value={device.importedAt ? formatDate(device.importedAt) : null} />
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function DeviceRegisterPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [returningDevice, setReturningDevice] = useState<Device | null>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
+  // Debounce search 300 ms
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const { data: res, isLoading } = useQuery<Paginated<Device>>({
-    queryKey: ['devices', page, filterStatus, filterType],
+    queryKey: ['devices', page, filterStatus, filterType, filterCategory, search],
     queryFn: () => api.get<Paginated<Device>>('/devices', {
-      params: { page, limit: 20, ...(filterStatus && { status: filterStatus }), ...(filterType && { type: filterType }) },
+      params: {
+        page,
+        limit: 20,
+        ...(filterStatus   && { status:        filterStatus }),
+        ...(filterType     && { type:           filterType }),
+        ...(filterCategory && { assetCategory:  filterCategory }),
+        ...(search         && { q:              search }),
+      },
     }).then(r => r.data),
   });
 
@@ -301,20 +403,37 @@ export default function DeviceRegisterPage() {
 
   return (
     <Layout>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-[22px] font-semibold text-ink">Device Register</h1>
           <p className="text-sm text-ink-muted mt-0.5">All IT assets in the organisation</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
-        >
-          + Add Device
-        </button>
+        <div className="flex gap-2">
+          <Link
+            to="/admin/devices/import"
+            className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]"
+          >
+            Import from Excel
+          </Link>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+          >
+            + Add Device
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-3 mb-4 items-center">
+      {/* Filters + search */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <input
+          type="text"
+          placeholder="Search ID, model, serial, user…"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          className={`${inputCls} max-w-[220px]`}
+        />
+
         <select
           value={filterStatus}
           onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
@@ -336,6 +455,20 @@ export default function DeviceRegisterPage() {
           {DEVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
 
+        <select
+          value={filterCategory}
+          onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
+          className={selectCls}
+        >
+          <option value="">All Categories</option>
+          <option value="Laptop">Laptop</option>
+          <option value="MacBook">MacBook</option>
+          <option value="Rented">Rented</option>
+          <option value="Desktop">Desktop</option>
+          <option value="Monitor">Monitor</option>
+          <option value="Other">Other</option>
+        </select>
+
         <span className="ml-auto text-xs text-ink-muted">
           {res?.total ?? 0} device{(res?.total ?? 0) !== 1 ? 's' : ''}
         </span>
@@ -351,7 +484,7 @@ export default function DeviceRegisterPage() {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-hair">
-              {['Device ID', 'Type', 'Make / Model', 'Serial No.', 'Status', 'Condition', 'Purchased', 'Holder', 'Actions'].map(h => (
+              {['Asset #', 'Type', 'Make / Model', 'Serial No.', 'Status', 'Assigned To', 'Purchased', 'Holder', 'Actions'].map(h => (
                 <th key={h}
                   className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
                              uppercase tracking-[0.06em] whitespace-nowrap">
@@ -365,59 +498,83 @@ export default function DeviceRegisterPage() {
 
             {!isLoading && filtered.map(device => {
               const activeAlloc = device.allocations.find(a => !a.returnedOn);
+              const isExpanded  = expandedId === device.id;
+              const hasSpecs    = !!(device.cpu || device.ram || device.storage || device.macAddress ||
+                                     device.osVersion || device.remarks || device.assignedToName ||
+                                     device.rentedFrom || device.importedFrom);
               return (
-                <tr key={device.id} className="hover:bg-[#fafafa]">
-                  <td className="px-4 py-3.5 font-mono text-xs text-indigo-600 font-medium whitespace-nowrap">
-                    {device.id}
-                  </td>
-                  <td className="px-4 py-3.5 text-ink">{device.type}</td>
-                  <td className="px-4 py-3.5 text-ink-muted text-xs">{device.makeModel ?? '—'}</td>
-                  <td className="px-4 py-3.5 font-mono text-xs text-ink-muted">{device.serialNumber}</td>
-                  <td className="px-4 py-3.5">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border
-                      ${STATUS_STYLES[device.status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
-                      {device.status.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-ink-muted text-xs">{device.condition ?? '—'}</td>
-                  <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
-                    {formatDate(device.purchasedOn)}
-                  </td>
-                  <td className="px-4 py-3.5 text-xs text-ink-soft">
-                    {activeAlloc
-                      ? <span title={activeAlloc.employee.email}>{activeAlloc.employee.name}</span>
-                      : <span className="text-ink-muted italic">—</span>}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex gap-2">
-                      {device.status === 'ALLOCATED' && (
-                        <button
-                          onClick={() => setReturningDevice(device)}
-                          className="px-2.5 py-1 rounded-lg text-xs font-medium
-                                     bg-[#fef9ec] border border-[#f0d870] text-[#b07800]
-                                     hover:bg-[#fef3d0]"
-                        >
-                          Return
-                        </button>
-                      )}
-                      {device.status !== 'RETIRED' && device.status !== 'ALLOCATED' && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Retire ${device.id}? This cannot be undone.`)) {
-                              retireMutation.mutate(device.id);
-                            }
-                          }}
-                          disabled={retireMutation.isPending}
-                          className="px-2.5 py-1 rounded-lg text-xs font-medium
-                                     bg-[#fff1f2] border border-[#fecdd3] text-[#c0392b]
-                                     hover:bg-[#ffe4e6] disabled:opacity-40"
-                        >
-                          Retire
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                <>
+                  <tr
+                    key={device.id}
+                    className={`hover:bg-[#fafafa] ${hasSpecs ? 'cursor-pointer' : ''}`}
+                    onClick={hasSpecs ? () => setExpandedId(isExpanded ? null : device.id) : undefined}
+                  >
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        {hasSpecs && (
+                          <span className="text-[10px] text-ink-muted select-none">
+                            {isExpanded ? '▾' : '▸'}
+                          </span>
+                        )}
+                        <span className="font-mono text-xs text-indigo-600 font-medium whitespace-nowrap">
+                          {device.assetNumber ?? device.id}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-ink">{device.type}</td>
+                    <td className="px-4 py-3.5 text-ink-muted text-xs">{device.makeModel ?? '—'}</td>
+                    <td className="px-4 py-3.5 font-mono text-xs text-ink-muted">{device.serialNumber ?? '—'}</td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border
+                        ${STATUS_STYLES[device.status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
+                        {device.status.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-ink-soft">
+                      {device.assignedToName
+                        ? <span>{device.assignedToName}</span>
+                        : <span className="text-ink-muted italic">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
+                      {formatDate(device.purchasedOn)}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-ink-soft">
+                      {activeAlloc
+                        ? <span title={activeAlloc.employee.email}>{activeAlloc.employee.name}</span>
+                        : <span className="text-ink-muted italic">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-2">
+                        {device.status === 'ALLOCATED' && (
+                          <button
+                            onClick={() => setReturningDevice(device)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium
+                                       bg-[#fef9ec] border border-[#f0d870] text-[#b07800]
+                                       hover:bg-[#fef3d0]"
+                          >
+                            Return
+                          </button>
+                        )}
+                        {device.status !== 'RETIRED' && device.status !== 'ALLOCATED' && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Retire ${device.assetNumber ?? device.id}? This cannot be undone.`)) {
+                                retireMutation.mutate(device.id);
+                              }
+                            }}
+                            disabled={retireMutation.isPending}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium
+                                       bg-[#fff1f2] border border-[#fecdd3] text-[#c0392b]
+                                       hover:bg-[#ffe4e6] disabled:opacity-40"
+                          >
+                            Retire
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && <DeviceSpecPanel key={`spec-${device.id}`} device={device} />}
+                </>
               );
             })}
           </tbody>

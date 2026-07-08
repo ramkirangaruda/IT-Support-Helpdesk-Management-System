@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { RoleName } from '@prisma/client';
+import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -11,9 +13,33 @@ import { ReturnDeviceDto } from './dto/return-device.dto';
 
 const ADMIN_ROLES = [RoleName.IT_ADMIN, RoleName.SYS_ADMIN];
 
+const ALLOWED_EXTS = new Set(['.xlsx', '.xls']);
+
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
+
+  // POST /devices/import — import Excel file (IT_ADMIN, SYS_ADMIN)
+  @Post('import')
+  @Roles(...ADMIN_ROLES)
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    limits:  { fileSize: 10 * 1024 * 1024 },
+  }))
+  importDevices(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    @UploadedFile() file: any,
+    @Query('mode') mode: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const ext = file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase();
+    if (!ALLOWED_EXTS.has(ext)) {
+      throw new BadRequestException('Only .xlsx and .xls files are supported');
+    }
+    const importMode = mode === 'commit' ? 'commit' : 'preview';
+    return this.devicesService.importFromExcel(file.buffer, file.originalname, importMode, user);
+  }
 
   // GET /devices/overdue — employees over device limit (IT_ADMIN, MANAGER)
   @Get('overdue')

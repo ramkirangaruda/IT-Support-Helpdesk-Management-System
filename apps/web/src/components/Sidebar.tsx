@@ -76,6 +76,7 @@ const NAV: NavSection[] = [
       { label: 'My Devices',       to: '/devices/my-requests',   icon: <Monitor size={16} /> },
       { label: 'Request Device',   to: '/devices/request',       icon: <Package size={16} /> },
       { label: 'Device Register',  to: '/admin/devices',         icon: <Server size={16} />,        roles: ['IT_ADMIN', 'SYS_ADMIN'] },
+      { label: 'Import Devices',   to: '/admin/devices/import',  icon: <Package size={16} />,       roles: ['IT_ADMIN', 'SYS_ADMIN'] },
       { label: 'Device Requests',  to: '/admin/device-requests', icon: <ClipboardList size={16} />, roles: ['IT_ADMIN', 'SYS_ADMIN'] },
       { label: 'Approvals',        to: '/manager/approvals',     icon: <CheckSquare size={16} />,   roles: ['MANAGER', 'IT_ADMIN', 'SYS_ADMIN'] },
     ],

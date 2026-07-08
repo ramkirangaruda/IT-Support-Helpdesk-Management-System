@@ -379,6 +379,50 @@ email/password auth was already in place.
 - POST /api/admin/trigger-escalation-check — manually fire SLA escalation check
 - POST /api/admin/trigger-device-reminder-check — manually fire device limit check
 
+## Device Import (2026-07-08) — VERIFIED ✅ 2026-07-08
+E2E verification passed: Tests A-F all green (21/21). DB integrity confirmed (0 duplicates, correct
+status distribution, AuditLog entries present, RAM expressions stored as-is). Idempotency confirmed
+(re-import: 0 created / 4 updated). Auth boundary confirmed (EMPLOYEE → 403). File-type guard
+confirmed (.pdf → 400 with correct message). Verify script: `apps/api/scripts/verify-import.mjs`.
+Real iFocus Excel file not yet committed — run `node scripts/verify-import.mjs "path/to/WIP_Asset.xlsx" --commit` to import.
+
+## Device Import (2026-07-08)
+Device schema extended with 20 new optional fields: hardware specs (`cpu`, `ram`, `storage`,
+`macAddress`, `osVersion`, `osKey`, `antiVirus`, `officeVersion`, `officeKey`), assignment info
+(`assignedToName`, `assignedToProject`, `previousUser`), additional fields (`assetCategory`,
+`rentedFrom`, `rentedDate`, `returnedDate`, `remarks`), and import provenance (`importedFrom`,
+`importedAt`). Also added `assetNumber String? @unique` as the primary business identifier.
+`serialNumber` and `makeModel` are now nullable to accommodate imported data.
+
+Migration: `20260708000000_extend_device_specs` (applied via `db push` in dev; `migrate deploy` in prod).
+xlsx (SheetJS) installed in apps/api for server-side Excel parsing.
+
+**Excel import endpoint:** `POST /api/devices/import?mode=preview|commit`
+- Accepts `.xlsx` / `.xls` multipart file upload (field name `file`, max 10 MB)
+- Auth: IT_ADMIN, SYS_ADMIN only
+- `mode=preview` — parses + deduplicates, returns ImportResult without writing to DB
+- `mode=commit`  — upserts to DB, writes AuditLog per device (DEVICE_IMPORT_CREATE / DEVICE_IMPORT_UPDATE)
+- Deduplication: match by assetNumber (case-insensitive), then serialNumber, then create new
+- Handles iFocus WIP_Asset Excel format: "Laptop Inventory" + "Rented Asset Inventory" sheets
+- Status mapping: Instock/Bench/Vacant → AVAILABLE; Dead → RETIRED; project name → ALLOCATED
+- Excel serial date conversion: `new Date(Date.UTC(1899, 11, 30) + serial * 86400000)`
+- Messy RAM/storage strings (e.g. "8*8=16GB") stored as-is
+
+**Import UI:** `/admin/devices/import` (IT_ADMIN, SYS_ADMIN) — 3-step flow:
+  1. Upload: drag-and-drop zone or file picker
+  2. Preview: summary bar + per-sheet tabs + first-10-rows table + errors/skipped panels
+  3. Result: created/updated/skipped counts + "View Device Register" link + CSV error download
+
+**Device Register updates:**
+- Search bar (debounced 300 ms): searches assetNumber, makeModel, serialNumber, assignedToName, id
+- `assetCategory` filter dropdown (Laptop / MacBook / Rented / Desktop / Monitor)
+- "Import from Excel" button → /admin/devices/import
+- Expandable rows: click a row with spec data → sub-row shows Hardware / Software / Assignment / Notes panels
+- Table now shows Asset # (assetNumber ?? id) and Assigned To (text from import) columns
+
+Source data format: iFocus WIP_Asset Excel — see `DeviceImportParser` for column-mapping details.
+Parser file: `apps/api/src/devices/import/device-import.parser.ts`
+
 ## Known deferred items
 - File attachments with MinIO/S3 (procurement documents, ticket attachments)
 - Real SLA working-hours calendar (current impl uses wall-clock time)
