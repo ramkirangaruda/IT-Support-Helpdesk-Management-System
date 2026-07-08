@@ -344,7 +344,7 @@ model Device {
   assetNumber  String?      @unique
   type         String
   makeModel    String?
-  serialNumber String?      @unique
+  serialNumber String?
   status       DeviceStatus @default(AVAILABLE)
   condition    String?
   purchasedOn  DateTime?
@@ -372,6 +372,11 @@ model Device {
   rentedDate    DateTime?
   returnedDate  DateTime?
   remarks       String?
+
+  // Mobile / smart device
+  imei    String?
+  // ⚠️ Sensitive credential — IT_ADMIN/SYS_ADMIN visible only
+  appleId String?
 
   // Import provenance
   importedFrom  String?

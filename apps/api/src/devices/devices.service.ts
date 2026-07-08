@@ -662,6 +662,8 @@ export class DevicesService {
       rentedDate:       row.rentedDate    ?? null,
       returnedDate:     row.returnedDate  ?? null,
       remarks:          row.remarks       ?? null,
+      imei:             row.imei          ?? null,
+      appleId:          row.appleId       ?? null,
       importedFrom:     filename,
       importedAt:       new Date(),
     };

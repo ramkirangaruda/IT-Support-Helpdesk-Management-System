@@ -21,6 +21,8 @@ export interface ParsedDeviceRow {
   assignedToProject?: string;
   assetCategory?: string;
   rentedFrom?: string;
+  imei?: string;
+  appleId?: string;
   rentedDate?: Date;
   returnedDate?: Date;
   remarks?: string;
