@@ -66,8 +66,11 @@ export default function DeviceRequestPage() {
               </svg>
             </div>
             <h2 className="text-[22px] font-semibold text-ink mb-2">Request Submitted</h2>
+            <p className="text-sm text-ink-muted mb-1">
+              It's been sent to your manager — they need to approve or reject it next.
+            </p>
             <p className="text-sm text-ink-muted mb-4">
-              Your device request has been sent for manager approval.
+              You'll be notified either way. If approved, IT takes it from there.
             </p>
             <span className="ticket-id inline-block mb-6">{requestId}</span>
             <div className="flex gap-3 justify-center">

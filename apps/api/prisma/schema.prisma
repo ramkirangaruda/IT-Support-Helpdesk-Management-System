@@ -395,6 +395,7 @@ model DeviceRequest {
   deviceType    String
   justification String
   status        DeviceRequestStatus @default(SUBMITTED)
+  comment       String?             // manager's note on approve/reject — surfaced back to the requester
   decidedAt     DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt

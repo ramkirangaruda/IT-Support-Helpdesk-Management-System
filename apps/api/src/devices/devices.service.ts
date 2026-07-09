@@ -436,6 +436,7 @@ export class DevicesService {
         status:    newStatus,
         managerId: actor.id,
         decidedAt: new Date(),
+        comment:   dto.comment ?? null,
       },
       include: REQUEST_INCLUDE,
     });
@@ -450,7 +451,7 @@ export class DevicesService {
     });
 
     // Notify requester
-    await this.notifyDecision(request.requester.email, dto.decision, request.deviceType);
+    await this.notifyDecision(request.requester.email, dto.decision, request.deviceType, dto.comment);
 
     // Notify IT_ADMINs on approval so they can fulfil
     if (dto.decision === DecisionValue.APPROVED) {
@@ -708,11 +709,12 @@ export class DevicesService {
     toEmail:    string,
     decision:   DecisionValue,
     deviceType: string,
+    comment?:   string,
   ) {
     await this.notifications.sendAdHoc(
       toEmail,
       `device.request.${decision.toLowerCase()}`,
-      { deviceType },
+      { deviceType, reason: comment },
     );
   }
 

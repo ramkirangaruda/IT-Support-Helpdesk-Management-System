@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import { deviceRequestNextStepForRequester } from '../../lib/requestFlow';
 
 interface DeviceRequest {
   id: string;
@@ -174,9 +175,16 @@ export default function MyDeviceRequestsPage() {
               <p className="text-sm text-ink-muted mb-3 line-clamp-2">{req.justification}</p>
               <RequestTimeline status={req.status} />
 
-              {req.status === 'REJECTED' && req.comment && (
+              {req.status !== 'REJECTED' && (
+                <p className="mt-3 text-xs text-ink-muted">
+                  <span className="font-semibold text-ink-soft">Status: </span>
+                  {deviceRequestNextStepForRequester(req.status)}
+                </p>
+              )}
+
+              {req.status === 'REJECTED' && (
                 <div className="mt-3 rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 text-xs text-[#c0392b]">
-                  <span className="font-semibold">Reason: </span>{req.comment}
+                  {deviceRequestNextStepForRequester(req.status, req.comment)}
                 </div>
               )}
 

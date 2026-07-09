@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import {
+  deviceRequestActionConfirmation,
+  purchaseRequestActionConfirmation,
+  purchaseRequestNextStep,
+} from '../../lib/requestFlow';
 
 interface DeviceRequest {
   id: string;
@@ -116,6 +121,12 @@ function ActionPanel({
 function DeviceRequestsTab() {
   const queryClient = useQueryClient();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast(null), 6000);
+  }
 
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['pending-device-approvals'],
@@ -127,17 +138,21 @@ function DeviceRequestsTab() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/device-requests/${id}/decision`, { decision: 'APPROVED' }).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending-device-approvals'] }),
+    mutationFn: (req: DeviceRequest) =>
+      api.post(`/device-requests/${req.id}/decision`, { decision: 'APPROVED' }).then(r => r.data),
+    onSuccess: (_data, req) => {
+      void queryClient.invalidateQueries({ queryKey: ['pending-device-approvals'] });
+      flash(deviceRequestActionConfirmation('approved', req.requester.name));
+    },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ id, comment }: { id: string; comment: string }) =>
-      api.post(`/device-requests/${id}/decision`, { decision: 'REJECTED', comment }).then(r => r.data),
-    onSuccess: () => {
+    mutationFn: ({ req, comment }: { req: DeviceRequest; comment: string }) =>
+      api.post(`/device-requests/${req.id}/decision`, { decision: 'REJECTED', comment }).then(r => r.data),
+    onSuccess: (_data, { req }) => {
       void queryClient.invalidateQueries({ queryKey: ['pending-device-approvals'] });
       setRejectingId(null);
+      flash(deviceRequestActionConfirmation('rejected', req.requester.name));
     },
   });
 
@@ -170,6 +185,11 @@ function DeviceRequestsTab() {
 
   return (
     <div className="bg-white rounded-xl border border-hair overflow-hidden">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#1a7f4b] text-white shadow-lg max-w-sm">
+          {toast}
+        </div>
+      )}
       <div className="px-4 py-3 bg-[#fef9ec] border-b border-[#f0d870] flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-[#b07800]" />
         <span className="text-xs font-semibold text-[#b07800]">
@@ -212,7 +232,7 @@ function DeviceRequestsTab() {
                 <td className="px-4 py-3.5">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => approveMutation.mutate(req.id)}
+                      onClick={() => approveMutation.mutate(req)}
                       disabled={approveMutation.isPending || rejectingId === req.id}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1a7f4b] text-white
                                  hover:bg-[#166940] disabled:opacity-40"
@@ -239,7 +259,7 @@ function DeviceRequestsTab() {
                   <td colSpan={5} className="p-0">
                     <ActionPanel
                       decision="REJECTED"
-                      onConfirm={comment => rejectMutation.mutate({ id: req.id, comment })}
+                      onConfirm={comment => rejectMutation.mutate({ req, comment })}
                       onCancel={() => setRejectingId(null)}
                       isPending={rejectMutation.isPending}
                       isError={rejectMutation.isError}
@@ -260,7 +280,7 @@ function DeviceRequestsTab() {
 function PurchaseRequestsTab() {
   const queryClient = useQueryClient();
   const [actionState, setActionState] = useState<{ id: string; type: 'REJECTED' | 'ON_HOLD' } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const { data: rawPrs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['pending-pr-approvals'],
@@ -272,26 +292,30 @@ function PurchaseRequestsTab() {
   // IT_ADMIN/SYS_ADMIN viewers get every PR back unscoped — only show ones actually decidable here.
   const prs = rawPrs.filter(pr => ACTIONABLE_PR_STATUSES.has(pr.status));
 
-  function flash(text: string) {
-    setToast(text);
-    setTimeout(() => setToast(null), 4000);
+  function flash(kind: 'ok' | 'err', text: string) {
+    setToast({ kind, text });
+    setTimeout(() => setToast(null), 6000);
   }
 
   const approveMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/purchase-requests/${id}/approve`, { decision: 'APPROVED' }).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending-pr-approvals'] }),
-    onError: (err) => flash(errMsg(err, 'Could not approve this request')),
+    onSuccess: (data: { status: string }) => {
+      void queryClient.invalidateQueries({ queryKey: ['pending-pr-approvals'] });
+      flash('ok', purchaseRequestActionConfirmation('APPROVED', data.status));
+    },
+    onError: (err) => flash('err', errMsg(err, 'Could not approve this request')),
   });
 
   const actionMutation = useMutation({
     mutationFn: ({ id, decision, comment }: { id: string; decision: 'REJECTED' | 'ON_HOLD'; comment: string }) =>
       api.post(`/purchase-requests/${id}/approve`, { decision, comment: comment || undefined }).then(r => r.data),
-    onSuccess: () => {
+    onSuccess: (data: { status: string }, { decision }) => {
       void queryClient.invalidateQueries({ queryKey: ['pending-pr-approvals'] });
       setActionState(null);
+      flash('ok', purchaseRequestActionConfirmation(decision, data.status));
     },
-    onError: (err) => flash(errMsg(err, 'Could not process this request')),
+    onError: (err) => flash('err', errMsg(err, 'Could not process this request')),
   });
 
   if (isLoading) {
@@ -323,8 +347,9 @@ function PurchaseRequestsTab() {
   return (
     <div className="bg-white rounded-xl border border-hair overflow-hidden">
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#c0392b] text-white shadow-lg max-w-sm">
-          {toast}
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg max-w-sm
+          ${toast.kind === 'ok' ? 'bg-[#1a7f4b]' : 'bg-[#c0392b]'} text-white`}>
+          {toast.text}
         </div>
       )}
       <div className="px-4 py-3 bg-[#fef9ec] border-b border-[#f0d870] flex items-center gap-2">
@@ -337,7 +362,7 @@ function PurchaseRequestsTab() {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-hair">
-              {['PR ID', 'Item', 'Qty', 'Est. Cost', 'Budget Code', 'Raised By', 'Linked Request', 'Raised', 'Actions'].map(h => (
+              {['PR ID', 'Stage', 'Item', 'Qty', 'Est. Cost', 'Budget Code', 'Raised By', 'Linked Request', 'Raised', 'Actions'].map(h => (
                 <th key={h}
                   className="px-4 py-3 text-left text-[11px] font-medium text-ink-muted
                              uppercase tracking-[0.06em] whitespace-nowrap">
@@ -363,6 +388,9 @@ function PurchaseRequestsTab() {
                   >
                     <td className="px-4 py-3.5 font-mono text-xs text-indigo-600 font-medium whitespace-nowrap">
                       {pr.id}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-ink-muted max-w-[160px]">
+                      {purchaseRequestNextStep(pr.status)}
                     </td>
                     <td className="px-4 py-3.5 max-w-xs">
                       <p className="font-medium text-ink line-clamp-2">{pr.itemSpec}</p>
@@ -420,7 +448,7 @@ function PurchaseRequestsTab() {
 
                   {isActingOn && (
                     <tr key={`action-${pr.id}`}>
-                      <td colSpan={9} className="p-0">
+                      <td colSpan={10} className="p-0">
                         <ActionPanel
                           decision={actionState.type}
                           onConfirm={comment => actionMutation.mutate({ id: pr.id, decision: actionState.type, comment })}

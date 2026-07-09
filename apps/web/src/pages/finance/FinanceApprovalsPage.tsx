@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
+import { purchaseRequestActionConfirmation } from '../../lib/requestFlow';
 
 interface PurchaseRequest {
   id: string;
@@ -102,6 +103,12 @@ export default function FinanceApprovalsPage() {
   const queryClient = useQueryClient();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [holdingId,   setHoldingId]   = useState<string | null>(null);
+  const [toast,       setToast]       = useState<string | null>(null);
+
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast(null), 6000);
+  }
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['finance-approvals'],
@@ -114,7 +121,10 @@ export default function FinanceApprovalsPage() {
   const approveMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/purchase-requests/${id}/approve`, { decision: 'APPROVED' }).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['finance-approvals'] }),
+    onSuccess: (data: { status: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['finance-approvals'] });
+      flash(purchaseRequestActionConfirmation('APPROVED', data.status));
+    },
   });
 
   const holdMutation = useMutation({
@@ -123,6 +133,7 @@ export default function FinanceApprovalsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['finance-approvals'] });
       setHoldingId(null);
+      flash(purchaseRequestActionConfirmation('ON_HOLD', 'ON_HOLD'));
     },
   });
 
@@ -132,6 +143,7 @@ export default function FinanceApprovalsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['finance-approvals'] });
       setRejectingId(null);
+      flash(purchaseRequestActionConfirmation('REJECTED', 'REJECTED'));
     },
   });
 
@@ -300,6 +312,12 @@ export default function FinanceApprovalsPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#1a7f4b] text-white shadow-lg max-w-sm">
+          {toast}
         </div>
       )}
     </Layout>

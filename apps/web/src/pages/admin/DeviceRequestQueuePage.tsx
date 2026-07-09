@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
 import Pagination from '../../components/Pagination';
+import { deviceRequestNextStepForViewer } from '../../lib/requestFlow';
 
 interface DeviceRequest {
   id: string;
@@ -70,9 +71,14 @@ function TableRowSkeleton() {
 
 // ── Allocate Device Modal ─────────────────────────────────────────────────────
 
-function AllocateModal({ request, onClose }: { request: DeviceRequest; onClose: () => void }) {
+function AllocateModal({ request, onClose, onAllocated }: {
+  request: DeviceRequest;
+  onClose: () => void;
+  onAllocated: (deviceId: string) => void;
+}) {
   const queryClient = useQueryClient();
   const [deviceId, setDeviceId] = useState('');
+  const [conditionAtIssue, setConditionAtIssue] = useState('Good');
 
   const { data: available = [], isLoading } = useQuery<AvailableDevice[]>({
     queryKey: ['devices-available', request.deviceType],
@@ -84,9 +90,10 @@ function AllocateModal({ request, onClose }: { request: DeviceRequest; onClose: 
 
   const allocateMutation = useMutation({
     mutationFn: () =>
-      api.post(`/device-requests/${request.id}/allocate`, { deviceId }).then(r => r.data),
+      api.post(`/device-requests/${request.id}/allocate`, { deviceId, conditionAtIssue }).then(r => r.data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['device-requests'] });
+      onAllocated(deviceId);
       onClose();
     },
   });
@@ -157,6 +164,25 @@ function AllocateModal({ request, onClose }: { request: DeviceRequest; onClose: 
             </div>
           )}
 
+          {available.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Condition at Issue
+              </label>
+              <select
+                value={conditionAtIssue}
+                onChange={e => setConditionAtIssue(e.target.value)}
+                className="w-full rounded-lg border border-hair px-3 py-2 text-sm bg-white text-ink
+                           focus:outline-none focus:border-2 focus:border-indigo-600"
+              >
+                <option value="New">New</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Refurbished">Refurbished</option>
+              </select>
+            </div>
+          )}
+
           {allocateMutation.isError && (
             <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 mb-3">
               <p className="text-xs text-[#c0392b]">Allocation failed. Please try again.</p>
@@ -166,7 +192,7 @@ function AllocateModal({ request, onClose }: { request: DeviceRequest; onClose: 
           <div className="flex gap-3 pb-6">
             <button
               onClick={() => allocateMutation.mutate()}
-              disabled={!deviceId || allocateMutation.isPending || available.length === 0}
+              disabled={!deviceId || !conditionAtIssue || allocateMutation.isPending || available.length === 0}
               className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
                          hover:bg-indigo-700 disabled:opacity-50"
             >
@@ -195,6 +221,12 @@ export default function DeviceRequestQueuePage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [allocatingRequest, setAllocatingRequest] = useState<DeviceRequest | null>(null);
   const [page, setPage] = useState(1);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast(null), 5000);
+  }
 
   const { data: requests = [], isLoading } = useQuery<DeviceRequest[]>({
     queryKey: ['device-requests'],
@@ -302,6 +334,9 @@ export default function DeviceRequestQueuePage() {
                     ${STATUS_STYLES[req.status] ?? 'bg-[#f2f2f7] text-[#6e6e73] border-hair'}`}>
                     {STATUS_LABEL[req.status] ?? req.status}
                   </span>
+                  <p className="text-[11px] text-ink-muted mt-1 max-w-[180px]">
+                    {deviceRequestNextStepForViewer(req.status, req.manager?.name)}
+                  </p>
                 </td>
                 <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
                   {formatDate(req.createdAt)}
@@ -336,7 +371,16 @@ export default function DeviceRequestQueuePage() {
         <AllocateModal
           request={allocatingRequest}
           onClose={() => setAllocatingRequest(null)}
+          onAllocated={(deviceId) =>
+            flash(`Allocated ${deviceId} to ${allocatingRequest.requester.name}. They can see it now under My Devices.`)
+          }
         />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#1a7f4b] text-white shadow-lg max-w-sm">
+          {toast}
+        </div>
       )}
     </Layout>
   );

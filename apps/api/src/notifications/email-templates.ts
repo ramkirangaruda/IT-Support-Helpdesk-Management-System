@@ -482,14 +482,14 @@ function deviceRequestRejected(ctx: BuildEmailCtx, frontendUrl: string): EmailCo
     ${heading('Device request not approved')}
     ${para(`Hi ${meta.toName ?? 'there'},`)}
     ${alertBanner('Your device request has not been approved.')}
-    ${meta.deviceType ? kvTable([['Device Type', meta.deviceType]]) : ''}
+    ${meta.deviceType ? kvTable([['Device Type', meta.deviceType], ...(meta.reason ? [['Reason', meta.reason] as [string, string]] : [])]) : ''}
     ${para('If you have questions, please contact your manager or raise a new support ticket.')}
     ${btn(requestsUrl, 'View My Requests')}
   `);
   return {
     subject: '[TicketZilla] Device Request Not Approved',
     html,
-    text: `Your device request has not been approved.\n${meta.deviceType ? `Device Type: ${meta.deviceType}\n` : ''}Contact your manager if you have questions.`,
+    text: `Your device request has not been approved.\n${meta.deviceType ? `Device Type: ${meta.deviceType}\n` : ''}${meta.reason ? `Reason: ${meta.reason}\n` : ''}Contact your manager if you have questions.`,
   };
 }
 

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
 import Pagination from '../../components/Pagination';
+import { purchaseRequestNextStep } from '../../lib/requestFlow';
 
 interface Vendor {
   id: string;
@@ -271,7 +272,11 @@ const reviewSchema = z.object({
 });
 type ReviewForm = z.infer<typeof reviewSchema>;
 
-function ReviewModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => void }) {
+function ReviewModal({ pr, onClose, onSubmitted }: {
+  pr: PurchaseRequest;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
   const queryClient = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm<ReviewForm>({
     resolver: zodResolver(reviewSchema),
@@ -289,6 +294,7 @@ function ReviewModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => void
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['procurement-prs'] });
+      onSubmitted();
       onClose();
     },
   });
@@ -366,7 +372,12 @@ const poSchema = z.object({
 });
 type PoForm = z.infer<typeof poSchema>;
 
-function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendor[]; onClose: () => void }) {
+function PoModal({ pr, vendors, onClose, onRecorded }: {
+  pr: PurchaseRequest;
+  vendors: Vendor[];
+  onClose: () => void;
+  onRecorded: () => void;
+}) {
   const queryClient = useQueryClient();
   const [addingVendor, setAddingVendor] = useState(false);
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<PoForm>({
@@ -377,6 +388,7 @@ function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendo
     mutationFn: (v: PoForm) => api.post(`/purchase-requests/${pr.id}/po`, v).then(r => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['procurement-prs'] });
+      onRecorded();
       onClose();
     },
   });
@@ -466,7 +478,11 @@ const receiveSchema = z.object({
 });
 type ReceiveForm = z.infer<typeof receiveSchema>;
 
-function ReceiveModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => void }) {
+function ReceiveModal({ pr, onClose, onReceived }: {
+  pr: PurchaseRequest;
+  onClose: () => void;
+  onReceived: () => void;
+}) {
   const queryClient = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm<ReceiveForm>({
     resolver: zodResolver(receiveSchema),
@@ -477,6 +493,7 @@ function ReceiveModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => voi
       api.post(`/purchase-requests/${pr.id}/receive`, v).then(r => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['procurement-prs'] });
+      onReceived();
       onClose();
     },
   });
@@ -555,6 +572,12 @@ export default function ProcurementPipelinePage() {
   const [reviewTarget, setReviewTarget] = useState<PurchaseRequest | null>(null);
   const [poTarget, setPoTarget] = useState<PurchaseRequest | null>(null);
   const [receiveTarget, setReceiveTarget] = useState<PurchaseRequest | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast(null), 6000);
+  }
 
   const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['procurement-prs'],
@@ -696,6 +719,9 @@ export default function ProcurementPipelinePage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusBadge status={pr.status} />
+                      <p className="text-[11px] text-ink-muted mt-1 max-w-[180px]">
+                        {purchaseRequestNextStep(pr.status)}
+                      </p>
                     </td>
                     <td className="px-4 py-3.5 text-ink-muted text-xs whitespace-nowrap">
                       {formatDate(pr.createdAt)}
@@ -749,9 +775,38 @@ export default function ProcurementPipelinePage() {
       )}
 
       {showNewModal && <NewPrModal onClose={() => setShowNewModal(false)} />}
-      {reviewTarget && <ReviewModal pr={reviewTarget} onClose={() => setReviewTarget(null)} />}
-      {poTarget && <PoModal pr={poTarget} vendors={vendors} onClose={() => setPoTarget(null)} />}
-      {receiveTarget && <ReceiveModal pr={receiveTarget} onClose={() => setReceiveTarget(null)} />}
+      {reviewTarget && (
+        <ReviewModal
+          pr={reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          onSubmitted={() => flash(`Submitted. ${purchaseRequestNextStep('PENDING_MANAGER_APPROVAL')}`)}
+        />
+      )}
+      {poTarget && (
+        <PoModal
+          pr={poTarget}
+          vendors={vendors}
+          onClose={() => setPoTarget(null)}
+          onRecorded={() => flash(`PO recorded. ${purchaseRequestNextStep('PO_RAISED')}`)}
+        />
+      )}
+      {receiveTarget && (
+        <ReceiveModal
+          pr={receiveTarget}
+          onClose={() => setReceiveTarget(null)}
+          onReceived={() => flash(
+            receiveTarget.deviceRequest
+              ? `Received. Added to the device register, and ${receiveTarget.deviceRequest.requester.name} can now be allocated this device from Device Requests.`
+              : 'Received. Added to the device register — ready to allocate.'
+          )}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#1a7f4b] text-white shadow-lg max-w-sm">
+          {toast}
+        </div>
+      )}
     </Layout>
   );
 }
