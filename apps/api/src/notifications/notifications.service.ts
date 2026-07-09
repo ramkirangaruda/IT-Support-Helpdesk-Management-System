@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { NotificationChannel, NotificationStatus, RoleName, UserStatus } from '@prisma/client';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationEvent, RecipientRole } from './notification-job.interface';
+import { EmailJobPayload, EmailMeta, NotificationEvent, RecipientRole } from './notification-job.interface';
+import { NOTIFICATION_EMAIL_QUEUE_NAME, SEND_EMAIL_JOB } from './email.constants';
 
 interface Recipient {
   email: string;
@@ -14,6 +17,8 @@ interface EmitExtra {
   actorName?:           string;
   actorEmail?:          string; // excluded from recipient list to avoid self-notification
   slaRemainingMinutes?: number;
+  oldStatus?:           string;
+  newStatus?:           string;
 }
 
 type TicketRow = {
@@ -28,7 +33,10 @@ type TicketRow = {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue(NOTIFICATION_EMAIL_QUEUE_NAME) private readonly emailQueue: Queue,
+  ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -64,6 +72,7 @@ export class NotificationsService {
 
     for (const recipient of recipients) {
       try {
+        // 1. In-app notification — created immediately, shows in bell
         await this.prisma.notification.create({
           data: {
             ticketId:       ticket.id,
@@ -75,6 +84,36 @@ export class NotificationsService {
           },
         });
         this.logger.log(`Notification(${event}) → ${recipient.email}`);
+
+        // 2. Email notification — queued for async delivery
+        const emailRecord = await this.prisma.notification.create({
+          data: {
+            ticketId:       ticket.id,
+            recipientEmail: recipient.email,
+            channel:        NotificationChannel.EMAIL,
+            event,
+            status:         NotificationStatus.PENDING,
+          },
+        });
+
+        const meta: EmailMeta = {
+          toName:              recipient.name,
+          actorName:           extra?.actorName,
+          commentPreview:      extra?.commentBody ? extra.commentBody.slice(0, 200) : undefined,
+          slaRemainingMinutes: extra?.slaRemainingMinutes,
+          oldStatus:           extra?.oldStatus,
+          newStatus:           extra?.newStatus,
+        };
+
+        await this.emailQueue.add(SEND_EMAIL_JOB, {
+          notificationId: emailRecord.id,
+          to:             recipient.email,
+          event,
+          ticketId:       ticket.id,
+          recipientRole:  recipient.role,
+          meta,
+        } satisfies EmailJobPayload);
+
       } catch (err) {
         this.logger.error(
           `Failed to persist Notification(${event}, ${recipient.email}): ${(err as Error).message}`,
@@ -84,8 +123,9 @@ export class NotificationsService {
   }
 
   // Ad-hoc notification for non-ticket events (user approvals, device decisions, etc.)
-  async sendAdHoc(to: string, event: string): Promise<void> {
+  async sendAdHoc(to: string, event: string, meta?: EmailMeta): Promise<void> {
     try {
+      // 1. In-app notification
       await this.prisma.notification.create({
         data: {
           ticketId:       null,
@@ -97,6 +137,25 @@ export class NotificationsService {
         },
       });
       this.logger.log(`Notification(${event}) → ${to}`);
+
+      // 2. Email notification
+      const emailRecord = await this.prisma.notification.create({
+        data: {
+          ticketId:       null,
+          recipientEmail: to,
+          channel:        NotificationChannel.EMAIL,
+          event,
+          status:         NotificationStatus.PENDING,
+        },
+      });
+
+      await this.emailQueue.add(SEND_EMAIL_JOB, {
+        notificationId: emailRecord.id,
+        to,
+        event,
+        meta: meta ?? {},
+      } satisfies EmailJobPayload);
+
     } catch (err) {
       this.logger.error(`sendAdHoc(${event} → ${to}): ${(err as Error).message}`);
     }
@@ -191,7 +250,11 @@ export class NotificationsService {
 
   async listForUser(email: string, limit = 15) {
     return this.prisma.notification.findMany({
-      where:   { recipientEmail: email, status: NotificationStatus.SENT },
+      where: {
+        recipientEmail: email,
+        status:  NotificationStatus.SENT,
+        channel: NotificationChannel.IN_APP,  // bell shows in-app only
+      },
       include: { ticket: { select: { id: true, subject: true } } },
       orderBy: { createdAt: 'desc' },
       take:    Math.min(limit, 50),

@@ -29,6 +29,7 @@ import { ChatModule } from './chat/chat.module';
 import { ReportsModule } from './reports/reports.module';
 import { DevicesModule } from './devices/devices.module';
 import { DEVICE_QUEUE_NAME } from './devices/device-reminder.constants';
+import { NOTIFICATION_EMAIL_QUEUE_NAME } from './notifications/email.constants';
 import { ProcurementModule } from './procurement/procurement.module';
 import { AdminModule } from './admin/admin.module';
 import { AttachmentsModule } from './attachments/attachments.module';
@@ -56,6 +57,10 @@ import { AttachmentsModule } from './attachments/attachments.module';
     }),
     BullBoardModule.forFeature({
       name: DEVICE_QUEUE_NAME,
+      adapter: BullMQAdapter,
+    }),
+    BullBoardModule.forFeature({
+      name: NOTIFICATION_EMAIL_QUEUE_NAME,
       adapter: BullMQAdapter,
     }),
     PrismaModule,

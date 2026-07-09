@@ -522,50 +522,52 @@ export class ProcurementService {
   // ── Notification helpers ──────────────────────────────────────────────────
 
   private async notifyManagers(prId: string, itemSpec: string, raisedByName: string) {
-    void prId; void itemSpec; void raisedByName;
+    void raisedByName;
     const managers = await this.prisma.user.findMany({
       where:  { userRoles: { some: { role: { name: RoleName.MANAGER } } }, status: UserStatus.ACTIVE },
       select: { email: true },
     });
     for (const m of managers) {
-      await this.notifications.sendAdHoc(m.email, 'purchase.request.pending_manager');
+      await this.notifications.sendAdHoc(m.email, 'purchase.request.pending_manager', { prId, itemSpec });
     }
   }
 
   private async notifyFinance(prId: string, itemSpec: string, raisedByName: string) {
-    void prId; void itemSpec; void raisedByName;
+    void raisedByName;
     const team = await this.prisma.user.findMany({
       where:  { userRoles: { some: { role: { name: RoleName.FINANCE } } }, status: UserStatus.ACTIVE },
       select: { email: true },
     });
     for (const f of team) {
-      await this.notifications.sendAdHoc(f.email, 'purchase.request.pending_finance');
+      await this.notifications.sendAdHoc(f.email, 'purchase.request.pending_finance', { prId, itemSpec });
     }
   }
 
   private async notifyAdminsFinanceApproved(prId: string, itemSpec: string) {
-    void prId; void itemSpec;
     const admins = await this.prisma.user.findMany({
       where:  { userRoles: { some: { role: { name: RoleName.IT_ADMIN } } }, status: UserStatus.ACTIVE },
       select: { email: true },
     });
     for (const a of admins) {
-      await this.notifications.sendAdHoc(a.email, 'purchase.request.finance_approved');
+      await this.notifications.sendAdHoc(a.email, 'purchase.request.finance_approved', { prId, itemSpec });
     }
   }
 
   private async notifyRequesterRejected(toEmail: string, toName: string, prId: string, itemSpec: string, comment?: string) {
-    void toName; void prId; void itemSpec; void comment;
-    await this.notifications.sendAdHoc(toEmail, 'purchase.request.rejected');
+    await this.notifications.sendAdHoc(toEmail, 'purchase.request.rejected', {
+      toName,
+      prId,
+      itemSpec,
+      reason: comment,
+    });
   }
 
   private async notifyDeviceAvailable(toEmail: string, toName: string, deviceType: string) {
-    void toName; void deviceType;
-    await this.notifications.sendAdHoc(toEmail, 'device.purchased_available');
+    await this.notifications.sendAdHoc(toEmail, 'device.purchased_available', { toName, deviceType });
   }
 
   private async notifyAutoCreatedPr(toEmail: string, toName: string, prId: string, deviceType: string) {
-    void toName; void prId; void deviceType;
-    await this.notifications.sendAdHoc(toEmail, 'purchase.request.auto_created');
+    void toName;
+    await this.notifications.sendAdHoc(toEmail, 'purchase.request.auto_created', { prId, deviceType });
   }
 }

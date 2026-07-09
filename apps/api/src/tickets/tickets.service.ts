@@ -456,6 +456,8 @@ export class TicketsService {
       await this.notifications.emit(statusToEvent(dto.toStatus), id, {
         actorName:  actor.email,
         actorEmail: actor.email,
+        oldStatus:  existing.status,
+        newStatus:  dto.toStatus,
       });
     }
 

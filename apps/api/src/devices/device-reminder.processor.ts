@@ -114,7 +114,7 @@ export class DeviceReminderProcessor extends WorkerHost {
         ? [...adminEmails, ...managerEmails].filter(e => e !== employee.email)
         : adminEmails.filter(e => e !== employee.email);
 
-      await this.sendReminderNotification(employee, nextCycle, cc);
+      await this.sendReminderNotification(employee, nextCycle, cc, holdCount, maxDevices);
       reminded++;
 
       this.logger.log(
@@ -126,14 +126,26 @@ export class DeviceReminderProcessor extends WorkerHost {
   }
 
   private async sendReminderNotification(
-    employee: { id: string; name: string; email: string },
-    cycle:    number,
-    cc:       string[],
+    employee:   { id: string; name: string; email: string },
+    cycle:      number,
+    cc:         string[],
+    holdCount:  number,
+    maxDevices: number,
   ): Promise<void> {
-    await this.notifications.sendAdHoc(employee.email, `device.reminder.cycle${cycle}`);
-    // Notify CC recipients (admins, managers on cycle 3+) as separate in-app alerts
+    await this.notifications.sendAdHoc(employee.email, `device.reminder.cycle${cycle}`, {
+      toName:       employee.name,
+      deviceCount:  String(holdCount),
+      maxDevices:   String(maxDevices),
+      reminderCycle: String(cycle),
+    });
+    // CC recipients (admins, managers on cycle 3+)
     for (const email of cc) {
-      await this.notifications.sendAdHoc(email, `device.reminder.escalation_cycle${cycle}`);
+      await this.notifications.sendAdHoc(email, `device.reminder.escalation_cycle${cycle}`, {
+        toName:       employee.name,
+        deviceCount:  String(holdCount),
+        maxDevices:   String(maxDevices),
+        reminderCycle: String(cycle),
+      });
     }
   }
 }

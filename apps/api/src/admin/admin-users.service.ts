@@ -104,7 +104,10 @@ export class AdminUsersService {
       },
     });
 
-    await this.notifications.sendAdHoc(target.email, 'auth.account_approved');
+    await this.notifications.sendAdHoc(target.email, 'auth.account_approved', {
+      toName: target.name,
+      role:   dto.roles.join(', '),
+    });
 
     return { message: `User ${target.email} approved with roles: ${dto.roles.join(', ')}` };
   }
@@ -138,7 +141,10 @@ export class AdminUsersService {
       after: { accountStatus: AccountStatus.REJECTED, reason: dto.reason },
     });
 
-    await this.notifications.sendAdHoc(target.email, 'auth.account_rejected');
+    await this.notifications.sendAdHoc(target.email, 'auth.account_rejected', {
+      toName: target.name,
+      reason: dto.reason,
+    });
 
     return { message: `User ${target.email} rejected` };
   }
@@ -223,7 +229,10 @@ export class AdminUsersService {
     });
 
     if (wasPending) {
-      await this.notifications.sendAdHoc(target.email, 'auth.account_approved');
+      await this.notifications.sendAdHoc(target.email, 'auth.account_approved', {
+        toName: target.name,
+        role:   dto.role,
+      });
     }
 
     return { message: `${target.email} is now ${dto.role}` };

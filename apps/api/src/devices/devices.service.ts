@@ -421,7 +421,7 @@ export class DevicesService {
     });
 
     // Notify requester
-    await this.notifyDecision(request.requester.email, dto.decision);
+    await this.notifyDecision(request.requester.email, dto.decision, request.deviceType);
 
     // Notify IT_ADMINs on approval so they can fulfil
     if (dto.decision === DecisionValue.APPROVED) {
@@ -433,7 +433,7 @@ export class DevicesService {
         select: { email: true, name: true },
       });
       for (const admin of admins) {
-        await this.notifyApprovedAdmin(admin.email);
+        await this.notifyApprovedAdmin(admin.email, request.deviceType);
       }
 
       // Trigger auto-create of PurchaseRequest if no AVAILABLE stock of this type
@@ -676,15 +676,18 @@ export class DevicesService {
   // ── Notification helpers ──────────────────────────────────────────────────
 
   private async notifyDecision(
-    toEmail:  string,
-    decision: DecisionValue,
+    toEmail:    string,
+    decision:   DecisionValue,
+    deviceType: string,
   ) {
     await this.notifications.sendAdHoc(
-      toEmail, `device.request.${decision.toLowerCase()}`,
+      toEmail,
+      `device.request.${decision.toLowerCase()}`,
+      { deviceType },
     );
   }
 
-  private async notifyApprovedAdmin(toEmail: string) {
-    await this.notifications.sendAdHoc(toEmail, 'device.request.pending_fulfilment');
+  private async notifyApprovedAdmin(toEmail: string, deviceType: string) {
+    await this.notifications.sendAdHoc(toEmail, 'device.request.pending_fulfilment', { deviceType });
   }
 }

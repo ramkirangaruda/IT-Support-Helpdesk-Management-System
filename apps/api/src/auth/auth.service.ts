@@ -120,11 +120,16 @@ export class AuthService {
     });
 
     for (const admin of admins) {
-      await this.notifications.sendAdHoc(admin.email, 'auth.registration_pending');
+      await this.notifications.sendAdHoc(admin.email, 'auth.registration_pending', {
+        applicantName:  user.name,
+        applicantEmail: user.email,
+      });
     }
 
     // In-app confirmation for the registrant (they'll see it once approved and logged in)
-    await this.notifications.sendAdHoc(user.email, 'auth.registration_confirmation');
+    await this.notifications.sendAdHoc(user.email, 'auth.registration_confirmation', {
+      toName: user.name,
+    });
 
     this.logger.log(`New self-registration: ${user.email} (id=${user.id})`);
     return {
