@@ -309,6 +309,10 @@ export class DevicesService {
         requesterId:   actor.id,
         deviceType:    dto.deviceType,
         justification: dto.justification,
+        // listRequests() only surfaces PENDING_MANAGER_APPROVAL to managers — leaving this at
+        // the schema default (SUBMITTED) meant every new request was invisible to any approval
+        // queue forever, since nothing else ever transitioned it forward.
+        status: DeviceRequestStatus.PENDING_MANAGER_APPROVAL,
       },
       include: REQUEST_INCLUDE,
     });
