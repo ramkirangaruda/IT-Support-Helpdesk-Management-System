@@ -48,6 +48,13 @@ export class DevicesController {
     return this.devicesService.getOverdueEmployees();
   }
 
+  // GET /devices/types — distinct types in the register + AVAILABLE counts (any authenticated
+  // role — feeds the employee-facing device request form, not just admin screens)
+  @Get('types')
+  listTypes() {
+    return this.devicesService.listDeviceTypes();
+  }
+
   // GET /devices — device register (IT_ADMIN, SYS_ADMIN), paginated
   @Get()
   @Roles(...ADMIN_ROLES)

@@ -187,6 +187,80 @@ function NewPrModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── New Vendor Modal (quick-add — vendors have no dedicated management page) ──
+
+const vendorSchema = z.object({
+  name:         z.string().min(1, 'Required'),
+  category:     z.string().min(1, 'Required'),
+  leadTimeDays: z.string().regex(/^\d*$/, 'Whole number').optional(),
+});
+type VendorForm = z.infer<typeof vendorSchema>;
+
+function NewVendorModal({ onClose, onCreated }: { onClose: () => void; onCreated: (vendor: Vendor) => void }) {
+  const queryClient = useQueryClient();
+  const { register, handleSubmit, formState: { errors } } = useForm<VendorForm>({
+    resolver: zodResolver(vendorSchema),
+  });
+  const mutation = useMutation({
+    mutationFn: (v: VendorForm) =>
+      api.post<Vendor>('/vendors', {
+        name:     v.name,
+        category: v.category,
+        ...(v.leadTimeDays ? { leadTimeDays: Number(v.leadTimeDays) } : {}),
+      }).then(r => r.data),
+    onSuccess: (vendor) => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      onCreated(vendor);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair">
+          <h2 className="font-semibold text-ink">Add Vendor</h2>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit(v => mutation.mutate(v))} className="p-6 space-y-4">
+          <div>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Vendor Name
+            </label>
+            <input {...register('name')} type="text" placeholder="e.g. Redington India" className={inputCls} />
+            {errors.name && <p className="text-xs text-[#c0392b] mt-0.5">{errors.name.message}</p>}
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Category
+            </label>
+            <input {...register('category')} type="text" placeholder="e.g. Laptops, Mobiles, Peripherals" className={inputCls} />
+            {errors.category && <p className="text-xs text-[#c0392b] mt-0.5">{errors.category.message}</p>}
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Lead Time (days) <span className="normal-case text-ink-muted font-normal">(optional)</span>
+            </label>
+            <input {...register('leadTimeDays')} type="text" inputMode="numeric" placeholder="7" className={inputCls} />
+            {errors.leadTimeDays && <p className="text-xs text-[#c0392b] mt-0.5">{errors.leadTimeDays.message}</p>}
+          </div>
+          {mutation.isError && <p className="text-xs text-[#c0392b]">Failed to add vendor. Please try again.</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={mutation.isPending}
+              className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold
+                         hover:bg-indigo-700 disabled:opacity-50">
+              {mutation.isPending ? 'Adding…' : 'Add Vendor'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Review & Submit Modal (RAISED drafts — mostly auto-created stubs) ─────────
 
 const reviewSchema = z.object({
@@ -294,7 +368,8 @@ type PoForm = z.infer<typeof poSchema>;
 
 function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendor[]; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const { register, handleSubmit, formState: { errors } } = useForm<PoForm>({
+  const [addingVendor, setAddingVendor] = useState(false);
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<PoForm>({
     resolver: zodResolver(poSchema),
     defaultValues: { actualCost: pr.estCost },
   });
@@ -326,11 +401,19 @@ function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendo
             {errors.poNumber && <p className="text-xs text-[#c0392b] mt-0.5">{errors.poNumber.message}</p>}
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
-              Vendor
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em]">
+                Vendor
+              </label>
+              <button type="button" onClick={() => setAddingVendor(true)}
+                className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                + Add vendor
+              </button>
+            </div>
             <select {...register('vendorId')} className={`${inputCls} bg-white`}>
-              <option value="">Select vendor…</option>
+              <option value="">
+                {vendors.length === 0 ? 'No vendors yet — add one' : 'Select vendor…'}
+              </option>
               {vendors.map(v => <option key={v.id} value={v.id}>{v.name} ({v.category})</option>)}
             </select>
             {errors.vendorId && <p className="text-xs text-[#c0392b] mt-0.5">{errors.vendorId.message}</p>}
@@ -357,6 +440,16 @@ function PoModal({ pr, vendors, onClose }: { pr: PurchaseRequest; vendors: Vendo
           </div>
         </form>
       </div>
+
+      {addingVendor && (
+        <NewVendorModal
+          onClose={() => setAddingVendor(false)}
+          onCreated={(vendor) => {
+            setValue('vendorId', vendor.id, { shouldValidate: true });
+            setAddingVendor(false);
+          }}
+        />
+      )}
     </div>
   );
 }

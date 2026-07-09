@@ -129,6 +129,31 @@ export class DevicesService {
     return paginated(data, total, page, limit);
   }
 
+  // Distinct device types actually present in the register, with current AVAILABLE counts.
+  // Drives the device-request dropdown so an employee can only request a type the stock-check
+  // (here and in ProcurementService.handleDeviceRequestApproved) can actually recognize — those
+  // both match on an exact Device.type string, so a request type that doesn't exist in the
+  // register can never be fulfilled from stock even when matching devices are on hand under a
+  // different type label.
+  async listDeviceTypes() {
+    const [allTypes, available] = await this.prisma.$transaction([
+      this.prisma.device.findMany({
+        distinct: ['type'],
+        select:   { type: true },
+        orderBy:  { type: 'asc' },
+      }),
+      this.prisma.device.findMany({
+        where:  { status: DeviceStatus.AVAILABLE },
+        select: { type: true },
+      }),
+    ]);
+    const availableByType: Record<string, number> = {};
+    for (const d of available) {
+      availableByType[d.type] = (availableByType[d.type] ?? 0) + 1;
+    }
+    return allTypes.map(({ type }) => ({ type, availableCount: availableByType[type] ?? 0 }));
+  }
+
   async findDevice(id: string) {
     const device = await this.prisma.device.findUnique({
       where:   { id },

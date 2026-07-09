@@ -3,19 +3,14 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import api from '../../api/api';
 import Layout from '../../components/Layout';
 
-const DEVICE_TYPES = [
-  { value: 'Laptop',   label: 'Laptop' },
-  { value: 'Monitor',  label: 'Monitor' },
-  { value: 'Keyboard', label: 'Keyboard' },
-  { value: 'Mouse',    label: 'Mouse' },
-  { value: 'Headset',  label: 'Headset' },
-  { value: 'Phone',    label: 'Phone' },
-  { value: 'Other',    label: 'Other' },
-];
+interface DeviceTypeOption {
+  type: string;
+  availableCount: number;
+}
 
 const schema = z.object({
   deviceType:   z.string().min(1, 'Please select a device type'),
@@ -48,6 +43,11 @@ export default function DeviceRequestPage() {
   });
 
   const justification = watch('justification');
+
+  const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceTypeOption[]>({
+    queryKey: ['device-types'],
+    queryFn:  () => api.get<DeviceTypeOption[]>('/devices/types').then(r => r.data),
+  });
 
   const createMutation = useMutation({
     mutationFn: (values: FormValues) =>
@@ -112,11 +112,14 @@ export default function DeviceRequestPage() {
             <label className="block text-sm font-medium text-ink-soft mb-1">
               Device Type <span className="text-[#c0392b]">*</span>
             </label>
-            <select {...register('deviceType')} className={inputCls}>
-              <option value="">Select device type…</option>
-              {DEVICE_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+            <select {...register('deviceType')} className={inputCls} disabled={typesLoading}>
+              <option value="">{typesLoading ? 'Loading device types…' : 'Select device type…'}</option>
+              {deviceTypes.map(t => (
+                <option key={t.type} value={t.type}>
+                  {t.type}{t.availableCount > 0 ? ` (${t.availableCount} in stock)` : ' (none in stock — will be ordered)'}
+                </option>
               ))}
+              <option value="Other">Other (not in current inventory)</option>
             </select>
             <FieldError message={errors.deviceType?.message} />
           </div>
