@@ -99,7 +99,7 @@ async function main() {
     const line = i + 1;
     const parsed = validate(rows[i], line, report, seen);
     if (!parsed) continue;
-    const existing = await prisma.device.findUnique({ where: { serialNumber: parsed.serialNumber }, select: { id: true } });
+    const existing = await prisma.device.findFirst({ where: { serialNumber: parsed.serialNumber }, select: { id: true } });
     if (existing) {
       report.record({ line, status: 'skip', key: parsed.serialNumber, message: `serial already registered as ${existing.id}` });
       continue;
