@@ -33,6 +33,18 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function errMsg(err: unknown, fallback: string) {
+  const raw = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+  return Array.isArray(raw) ? raw.join('. ') : (raw ?? fallback);
+}
+
+// Only these statuses have a decision actually available to the caller. IT_ADMIN/SYS_ADMIN
+// viewers get an unscoped PR list from the API (they need it for other pages), so this page
+// filters it back down — a RAISED draft, for example, isn't decidable yet (it needs to be
+// reviewed and submitted on the Procurement Pipeline page first) and showing Approve/Hold/Reject
+// buttons for it would just 400 silently when clicked.
+const ACTIONABLE_PR_STATUSES = new Set(['PENDING_MANAGER_APPROVAL', 'PENDING_FINANCE_APPROVAL', 'ON_HOLD']);
+
 // ── Comment panel (shared for reject / on-hold) ───────────────────────────────
 
 function ActionPanel({
@@ -248,19 +260,28 @@ function DeviceRequestsTab() {
 function PurchaseRequestsTab() {
   const queryClient = useQueryClient();
   const [actionState, setActionState] = useState<{ id: string; type: 'REJECTED' | 'ON_HOLD' } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { data: prs = [], isLoading } = useQuery<PurchaseRequest[]>({
+  const { data: rawPrs = [], isLoading } = useQuery<PurchaseRequest[]>({
     queryKey: ['pending-pr-approvals'],
     queryFn: () =>
       api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } })
         .then(r => r.data.data),
     refetchInterval: 30_000,
   });
+  // IT_ADMIN/SYS_ADMIN viewers get every PR back unscoped — only show ones actually decidable here.
+  const prs = rawPrs.filter(pr => ACTIONABLE_PR_STATUSES.has(pr.status));
+
+  function flash(text: string) {
+    setToast(text);
+    setTimeout(() => setToast(null), 4000);
+  }
 
   const approveMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/purchase-requests/${id}/approve`, { decision: 'APPROVED' }).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pending-pr-approvals'] }),
+    onError: (err) => flash(errMsg(err, 'Could not approve this request')),
   });
 
   const actionMutation = useMutation({
@@ -270,6 +291,7 @@ function PurchaseRequestsTab() {
       void queryClient.invalidateQueries({ queryKey: ['pending-pr-approvals'] });
       setActionState(null);
     },
+    onError: (err) => flash(errMsg(err, 'Could not process this request')),
   });
 
   if (isLoading) {
@@ -300,6 +322,11 @@ function PurchaseRequestsTab() {
 
   return (
     <div className="bg-white rounded-xl border border-hair overflow-hidden">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium bg-[#c0392b] text-white shadow-lg max-w-sm">
+          {toast}
+        </div>
+      )}
       <div className="px-4 py-3 bg-[#fef9ec] border-b border-[#f0d870] flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-[#b07800]" />
         <span className="text-xs font-semibold text-[#b07800]">
@@ -430,13 +457,14 @@ export default function ManagerApprovalsPage() {
     refetchInterval: 30_000,
   });
 
-  const { data: prs = [] } = useQuery<PurchaseRequest[]>({
+  const { data: rawPrs = [] } = useQuery<PurchaseRequest[]>({
     queryKey: ['pending-pr-approvals'],
     queryFn: () =>
       api.get<{ data: PurchaseRequest[] }>('/purchase-requests', { params: { limit: 100 } })
         .then(r => r.data.data),
     refetchInterval: 30_000,
   });
+  const prs = rawPrs.filter(pr => ACTIONABLE_PR_STATUSES.has(pr.status));
 
   const totalPending = deviceRequests.length + prs.length;
 

@@ -21,7 +21,7 @@ Always begin every response with "Ramkiran," before saying anything else.
 - DB: PostgreSQL via Prisma ORM
 - Cache/Queue: Redis + BullMQ
 - Auth: JWT (cookie + bearer) with OIDC in production; mock dev-login in dev
-- Notifications: **in-app only** (Notification model + admin log + sidebar bell) — Gmail/email integration fully removed per product decision (2026-06-17). Do NOT reintroduce email/Gmail code unless explicitly asked.
+- Notifications: **in-app + SMTP email** — in-app records are always created (bell + admin log); SMTP email is sent IN ADDITION via BullMQ NotificationQueue. Gmail/Google-cloud code remains removed — only nodemailer SMTP is used.
 - Object storage: local MinIO in dev, S3-compatible in prod
 
 ## Architecture
@@ -423,8 +423,37 @@ xlsx (SheetJS) installed in apps/api for server-side Excel parsing.
 Source data format: iFocus WIP_Asset Excel — see `DeviceImportParser` for column-mapping details.
 Parser file: `apps/api/src/devices/import/device-import.parser.ts`
 
+## File Attachments (2026-07-09) — local filesystem storage
+Ticket attachments are fully wired end-to-end using local filesystem storage.
+
+**Storage:** `/uploads/attachments/{ticketId}/{timestamp}-{random8hex}.{ext}`
+- Never uses the original filename as the storage path (path traversal prevention)
+- Storage key format is S3-compatible for easy future migration to MinIO/S3
+
+**Backend (`apps/api/src/attachments/`):**
+- `POST /api/tickets/:id/attachments` — multipart upload, max 5 files × 5 MB
+  - Allowed MIME types: image/jpeg, image/png, image/gif, image/webp, application/pdf
+  - Magic byte verification (not just client-supplied Content-Type): JPEG FF D8 FF, PNG 89 50 4E 47, GIF 47 49 46 38, WEBP bytes 8-11, PDF 25 50 44 46
+  - Access: ticket requester, assignee, IT_ADMIN, SYS_ADMIN
+- `GET /api/tickets/:id/attachments` — list metadata (same access control)
+- `GET /api/attachments/:id/download` — streams file; Content-Disposition inline for images, attachment for PDFs
+- `multer` (memory storage) used for buffering; disk write in service after validation
+- `UPLOADS_ROOT = process.cwd()/uploads/attachments` (resolved at runtime)
+
+**Infrastructure:**
+- `/uploads/` in `.gitignore` — never committed
+- `docker-compose.prod.yml` api service has `./uploads:/app/uploads` volume mount
+- `scripts/backup/pg-backup.sh` now also archives `uploads/` as `uploads_{timestamp}.tar.gz`
+
+**Frontend:**
+- `NewTicketPage`: client-side type/size validation per file, remove button, progress bar; uploads after ticket creation
+- `TicketDetailPage`: attachments section with thumbnail (images) or PDF icon, size, View/Download link; "Add Attachment" button for agents/admins/requester
+- The download URL hits `/api/attachments/:id/download` directly (authenticated)
+
+**Migration to MinIO/S3:** storage key is already in S3 key format. To migrate, replace `fs.writeFileSync` / `fs.createReadStream` in `attachments.service.ts` with S3 `PutObject` / `GetObject` calls.
+
 ## Known deferred items
-- File attachments with MinIO/S3 (procurement documents, ticket attachments)
+- File attachments with MinIO/S3 migration (local filesystem in place; see File Attachments section above)
 - Real SLA working-hours calendar (current impl uses wall-clock time)
 - Finance PDF purchase order generation
 - Full E2E test suite (Playwright / Cypress)
@@ -433,11 +462,36 @@ Parser file: `apps/api/src/devices/import/device-import.parser.ts`
 - SLA/category/user-management config endpoints (§3.4 admin panel)
 - No-team-model manager scoping for procurement (managerId column added; set per user in seed/import)
 
+## Email notifications (2026-07-09) — SMTP via nodemailer
+SMTP email is now sent IN ADDITION to in-app notifications. In-app records remain the source of truth for the bell.
+
+**Architecture:**
+- `SmtpAdapter` (`apps/api/src/notifications/smtp.adapter.ts`) — nodemailer transporter; graceful-degradation on startup failure; 1+3 retries with 2s/4s/8s exponential backoff; console-log fallback when SMTP_HOST is unset (local dev).
+- `EmailProcessor` (`apps/api/src/notifications/email.processor.ts`) — BullMQ processor on `notification-email` queue; fetches full ticket from DB for ticket events; builds template via `buildEmail()`; updates `Notification.status → SENT|FAILED`.
+- `email-templates.ts` — inline HTML templates for all 22+ event types.
+- Every `emit()` and `sendAdHoc()` call now creates TWO Notification records: `channel:IN_APP status:SENT` (immediate, shown in bell) + `channel:EMAIL status:PENDING` (async, updated by processor).
+- `listForUser` (bell) now filters `channel:IN_APP` so email records never appear in the sidebar count.
+- Failed emails (after 3 retries) appear in `GET /api/admin/notifications?status=FAILED` as `channel:EMAIL` records.
+
+**Events with email templates:** ticket.created / assigned / status_changed / comment_added / sla_warning / escalated / resolved / closed / reopened; auth.account_approved / rejected / registration_pending / confirmation; device.request.approved / rejected / pending_fulfilment / device.purchased_available; device.reminder.cycleN / escalation_cycleN; purchase.request.pending_manager / pending_finance / finance_approved / rejected / auto_created.
+
+**Subject format:** `[TicketZilla] {Event Label} — {TicketID}` (ticket events) or `[TicketZilla] {Event Label}` (ad-hoc).
+
+**SMTP env vars** (add to `.env`; all optional — omitting SMTP_HOST → console-log fallback):
+```
+SMTP_HOST=mail.ifocussystec.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=ticketzilla@ifocussystec.com
+SMTP_PASSWORD=
+SMTP_FROM_NAME=TicketZilla
+```
+
 ## Deployment notes
 1. Copy `.env.example` → `.env` and fill in all secrets
    - JWT_SECRET: `openssl rand -base64 32`
    - OIDC_*: set OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL for production SSO
-   - No Gmail/email env vars required — notifications are in-app only
+   - SMTP_*: set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD for email delivery
 2. docker-compose up -d postgres redis ai-service minio
 3. cd apps/api && npx prisma db push  (or migrate deploy if using migrations)
 4. npm run build --workspace=apps/api && node apps/api/dist/main.js

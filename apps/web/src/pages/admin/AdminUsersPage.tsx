@@ -41,6 +41,121 @@ function errMsg(err: unknown, fallback: string) {
   return Array.isArray(raw) ? raw.join('. ') : (raw ?? fallback);
 }
 
+// ── Create account modal ─────────────────────────────────────────────────────
+
+function CreateUserModal({ assignable, onClose, onCreated }: {
+  assignable: { value: string; label: string }[];
+  onClose:    () => void;
+  onCreated:  (message: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [name,       setName]       = useState('');
+  const [email,      setEmail]      = useState('');
+  const [department, setDepartment] = useState('');
+  const [roles,      setRoles]      = useState<string[]>([]);
+  const [error,      setError]      = useState<string | null>(null);
+
+  function toggleRole(role: string) {
+    setRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
+  }
+
+  const mutation = useMutation({
+    mutationFn: () => api.post('/admin/users', { name, email, department, roles }).then(r => r.data),
+    onSuccess: (data: { message?: string }) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      onCreated(data?.message ?? `Account created for ${email}`);
+    },
+    onError: (err) => setError(errMsg(err, 'Could not create account')),
+  });
+
+  const canSubmit = name.trim() && email.trim() && department.trim() && roles.length > 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-md p-6">
+        <h2 className="text-base font-semibold text-ink mb-1">Create account</h2>
+        <p className="text-sm text-ink-muted mb-5">
+          A temporary password is generated automatically and emailed to the new user.
+        </p>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-ink-soft mb-1">Full name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Jane Doe"
+              className="w-full rounded-lg border border-hair px-3 py-2 text-sm text-ink
+                         focus:outline-none focus:border-2 focus:border-indigo-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-soft mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="jane.doe@company.com"
+              className="w-full rounded-lg border border-hair px-3 py-2 text-sm text-ink
+                         focus:outline-none focus:border-2 focus:border-indigo-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-soft mb-1">Department</label>
+            <input
+              value={department}
+              onChange={e => setDepartment(e.target.value)}
+              placeholder="Engineering"
+              className="w-full rounded-lg border border-hair px-3 py-2 text-sm text-ink
+                         focus:outline-none focus:border-2 focus:border-indigo-600"
+            />
+          </div>
+        </div>
+
+        <p className="text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-2">
+          Assign roles <span className="text-[#c0392b] font-normal">(select at least one)</span>
+        </p>
+        <div className="space-y-2 mb-4">
+          {assignable.map(r => (
+            <label key={r.value} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={roles.includes(r.value)}
+                onChange={() => toggleRole(r.value)}
+                className="rounded border-hair text-indigo-600"
+              />
+              <span className="text-sm text-ink-soft">{r.label}</span>
+            </label>
+          ))}
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-[#fff1f2] border border-[#fecdd3] px-3 py-2 mb-4">
+            <p className="text-xs text-[#c0392b]">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={() => mutation.mutate()}
+          disabled={!canSubmit || mutation.isPending}
+          className="w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium
+                     hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {mutation.isPending ? 'Creating…' : 'Create & Email Credentials'}
+        </button>
+        <button
+          onClick={onClose}
+          disabled={mutation.isPending}
+          className="mt-2 w-full py-2 rounded-lg border border-hair text-sm text-ink-soft
+                     hover:bg-[#fafafa] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TableSkeleton() {
   return (
     <div className="bg-white rounded-xl border border-hair overflow-hidden animate-pulse">
@@ -63,9 +178,10 @@ export default function AdminUsersPage() {
   const isSysAdmin = !!user?.roles.includes('SYS_ADMIN');
   const assignable = isSysAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.value !== 'SYS_ADMIN');
 
-  const [tab,    setTab]    = useState<TabKey>('all');
-  const [picked, setPicked] = useState<Record<string, string>>({});
-  const [toast,  setToast]  = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [tab,      setTab]      = useState<TabKey>('all');
+  const [picked,   setPicked]   = useState<Record<string, string>>({});
+  const [toast,    setToast]    = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [creating, setCreating] = useState(false);
 
   function flash(kind: 'ok' | 'err', text: string) {
     setToast({ kind, text });
@@ -102,11 +218,20 @@ export default function AdminUsersPage() {
 
   return (
     <Layout>
-      <div className="mb-6">
-        <h1 className="text-[22px] font-semibold text-ink">User Management</h1>
-        <p className="text-sm text-ink-muted mt-0.5">
-          Assign roles to users and manage account access. Assigning a role to a pending user grants them login access.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold text-ink">User Management</h1>
+          <p className="text-sm text-ink-muted mt-0.5">
+            Assign roles to users and manage account access. Assigning a role to a pending user grants them login access.
+          </p>
+        </div>
+        <button
+          onClick={() => setCreating(true)}
+          className="px-3.5 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white
+                     hover:bg-indigo-700 whitespace-nowrap"
+        >
+          + Create Account
+        </button>
       </div>
 
       {/* Tabs */}
@@ -230,6 +355,17 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {creating && (
+        <CreateUserModal
+          assignable={assignable}
+          onClose={() => setCreating(false)}
+          onCreated={(message) => {
+            setCreating(false);
+            flash('ok', message);
+          }}
+        />
       )}
 
       {toast && (

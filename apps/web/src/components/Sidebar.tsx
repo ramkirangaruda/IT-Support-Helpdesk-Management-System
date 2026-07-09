@@ -133,6 +133,7 @@ function eventLabel(event: string): string {
     'ticket.resolved':             'Ticket resolved',
     'ticket.closed':               'Ticket closed',
     'ticket.reopened':             'Ticket reopened',
+    'auth.account_created':        'An account was created for you',
     'auth.account_approved':       'Your account has been approved',
     'auth.account_rejected':       'Account registration not approved',
     'auth.registration_pending':   'New account pending approval',

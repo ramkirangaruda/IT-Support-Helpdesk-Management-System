@@ -35,6 +35,8 @@ interface Device {
   rentedDate: string | null;
   returnedDate: string | null;
   remarks: string | null;
+  imei: string | null;
+  appleId: string | null;
   importedFrom: string | null;
   importedAt: string | null;
   allocations: Array<{
@@ -62,6 +64,14 @@ const returnSchema = z.object({
 type ReturnFormValues = z.infer<typeof returnSchema>;
 
 const DEVICE_TYPES = ['Laptop', 'Monitor', 'Keyboard', 'Mouse', 'Headset', 'Phone', 'Other'];
+
+const CATEGORY_TABS = [
+  { label: 'All',           key: 'all',    categories: '' },
+  { label: 'Laptops',       key: 'laptop', categories: 'Laptop,MacBook,Desktop' },
+  { label: 'Rented',        key: 'rented', categories: 'Rented' },
+  { label: 'Smart Devices', key: 'smart',  categories: 'iPhone,iPad,Mobile,Tablet,Smartwatch' },
+  { label: 'TV & AV',       key: 'tv',     categories: 'TV,Projector,Streaming Device,Monitor,AV Equipment,Payment Terminal,Access Control' },
+] as const;
 
 const STATUS_STYLES: Record<string, string> = {
   AVAILABLE: 'bg-[#eafaf3] text-[#1a7f4b] border-[#a3d9b8]',
@@ -306,14 +316,23 @@ function SpecRow({ label, value }: { label: string; value: string | null | undef
 }
 
 function DeviceSpecPanel({ device }: { device: Device }) {
-  const hasSpec = device.cpu || device.ram || device.storage || device.macAddress ||
-                  device.osVersion || device.antiVirus || device.officeVersion;
+  const hasSpec   = device.cpu || device.ram || device.storage || device.macAddress ||
+                    device.osVersion || device.antiVirus || device.officeVersion || device.imei;
   const hasAssign = device.assignedToName || device.assignedToProject || device.rentedFrom;
   const hasMeta   = device.remarks || device.importedFrom;
+  const hasCred   = !!device.appleId;
 
   return (
     <tr>
       <td colSpan={9} className="px-4 py-4 bg-[#fafafa] border-b border-hair">
+        {hasCred && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-[#f0d870] bg-[#fef9ec] px-3 py-2">
+            <span className="text-sm">⚠️</span>
+            <p className="text-[11px] text-[#b07800] font-medium">
+              This device has stored credentials — visible to IT Admin and Sys Admin only
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {hasSpec && (
             <div className="space-y-1.5">
@@ -322,6 +341,7 @@ function DeviceSpecPanel({ device }: { device: Device }) {
               <SpecRow label="RAM"         value={device.ram} />
               <SpecRow label="Storage"     value={device.storage} />
               <SpecRow label="MAC Address" value={device.macAddress} />
+              <SpecRow label="IMEI"        value={device.imei} />
             </div>
           )}
           <div className="space-y-1.5">
@@ -331,6 +351,9 @@ function DeviceSpecPanel({ device }: { device: Device }) {
             <SpecRow label="Antivirus"    value={device.antiVirus} />
             <SpecRow label="Office"       value={device.officeVersion} />
             <SpecRow label="Office Key"   value={device.officeKey} />
+            {hasCred && (
+              <SpecRow label="Apple ID" value={device.appleId} />
+            )}
           </div>
           {hasAssign && (
             <div className="space-y-1.5">
@@ -362,7 +385,7 @@ export default function DeviceRegisterPage() {
   const [returningDevice, setReturningDevice] = useState<Device | null>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
+  const [activeTab, setActiveTab] = useState<typeof CATEGORY_TABS[number]['key']>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -374,16 +397,18 @@ export default function DeviceRegisterPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  const tabCategories = CATEGORY_TABS.find(t => t.key === activeTab)?.categories ?? '';
+
   const { data: res, isLoading } = useQuery<Paginated<Device>>({
-    queryKey: ['devices', page, filterStatus, filterType, filterCategory, search],
+    queryKey: ['devices', page, filterStatus, filterType, activeTab, search],
     queryFn: () => api.get<Paginated<Device>>('/devices', {
       params: {
         page,
         limit: 20,
-        ...(filterStatus   && { status:        filterStatus }),
-        ...(filterType     && { type:           filterType }),
-        ...(filterCategory && { assetCategory:  filterCategory }),
-        ...(search         && { q:              search }),
+        ...(filterStatus   && { status:       filterStatus }),
+        ...(filterType     && { type:          filterType }),
+        ...(tabCategories  && { assetCategory: tabCategories }),
+        ...(search         && { q:             search }),
       },
     }).then(r => r.data),
   });
@@ -424,6 +449,25 @@ export default function DeviceRegisterPage() {
         </div>
       </div>
 
+      {/* Category tabs */}
+      <div className="flex border-b border-hair mb-4 -mt-2">
+        {CATEGORY_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => { setActiveTab(tab.key); setPage(1); }}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors
+              ${activeTab === tab.key
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-ink-muted hover:text-ink hover:border-hair'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+        <span className="ml-auto self-center pr-1 text-xs text-ink-muted">
+          {res?.total ?? 0} device{(res?.total ?? 0) !== 1 ? 's' : ''}
+        </span>
+      </div>
+
       {/* Filters + search */}
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input
@@ -454,24 +498,6 @@ export default function DeviceRegisterPage() {
           <option value="">All Types</option>
           {DEVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-
-        <select
-          value={filterCategory}
-          onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
-          className={selectCls}
-        >
-          <option value="">All Categories</option>
-          <option value="Laptop">Laptop</option>
-          <option value="MacBook">MacBook</option>
-          <option value="Rented">Rented</option>
-          <option value="Desktop">Desktop</option>
-          <option value="Monitor">Monitor</option>
-          <option value="Other">Other</option>
-        </select>
-
-        <span className="ml-auto text-xs text-ink-muted">
-          {res?.total ?? 0} device{(res?.total ?? 0) !== 1 ? 's' : ''}
-        </span>
       </div>
 
       <div className="bg-white rounded-xl border border-hair overflow-hidden">
@@ -501,7 +527,7 @@ export default function DeviceRegisterPage() {
               const isExpanded  = expandedId === device.id;
               const hasSpecs    = !!(device.cpu || device.ram || device.storage || device.macAddress ||
                                      device.osVersion || device.remarks || device.assignedToName ||
-                                     device.rentedFrom || device.importedFrom);
+                                     device.rentedFrom || device.importedFrom || device.imei || device.appleId);
               return (
                 <>
                   <tr

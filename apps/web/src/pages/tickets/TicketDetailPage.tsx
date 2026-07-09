@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/api';
@@ -16,6 +16,16 @@ interface Comment {
   isInternal: boolean;
   createdAt:  string;
   author:     Actor;
+}
+
+interface Attachment {
+  id:         string;
+  ticketId:   string;
+  filename:   string;
+  mimeType:   string;
+  sizeBytes:  number;
+  storageKey: string;
+  createdAt:  string;
 }
 
 interface StatusHistoryEntry {
@@ -67,6 +77,40 @@ const PRIORITY_STYLES: Record<string, string> = {
   HIGH:     'bg-[#fff2ea] text-[#b45309]',
   CRITICAL: 'bg-[#fff1f2] text-[#c0392b]',
 };
+
+// ── Attachment helpers ────────────────────────────────────────────────────────
+
+const ATTACH_MAX_SIZE  = 5 * 1024 * 1024;
+const ATTACH_ALLOWED   = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']);
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024)          return `${bytes} B`;
+  if (bytes < 1024 * 1024)   return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function validateAttachFile(file: File): string | null {
+  if (!ATTACH_ALLOWED.has(file.type)) {
+    return `Type not allowed (${file.type || 'unknown'}). Accepted: JPEG, PNG, GIF, WEBP, PDF.`;
+  }
+  if (file.size > ATTACH_MAX_SIZE) return `Too large (${formatBytes(file.size)}). Max 5 MB.`;
+  return null;
+}
+
+function AttachFileIcon({ mimeType, className = 'w-5 h-5' }: { mimeType: string; className?: string }) {
+  if (mimeType === 'application/pdf') {
+    return (
+      <svg className={`${className} text-[#c0392b] shrink-0`} fill="currentColor" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className={`${className} text-indigo-500 shrink-0`} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+    </svg>
+  );
+}
 
 // ── Small reusable components ─────────────────────────────────────────────────
 
@@ -179,9 +223,10 @@ function DetailSkeleton() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const AGENT_ROLES       = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
-const ADMIN_ROLES       = new Set(['IT_ADMIN', 'SYS_ADMIN']);
+const AGENT_ROLES         = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
+const ADMIN_ROLES         = new Set(['IT_ADMIN', 'SYS_ADMIN']);
 const SPECIAL_TRANSITIONS = new Set(['ON_HOLD', 'RESOLVED']);
+const CAN_ATTACH_ROLES    = new Set(['AGENT', 'L2_L3', 'IT_ADMIN', 'SYS_ADMIN']);
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -200,10 +245,19 @@ export default function TicketDetailPage() {
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [aiResult,         setAiResult]         = useState<string | null>(null);
   const [aiAction,         setAiAction]         = useState<string | null>(null);
+  const [attachError,      setAttachError]      = useState<string | null>(null);
+  const [attachUploading,  setAttachUploading]  = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ticket, isLoading, isError } = useQuery<Ticket>({
     queryKey: ['ticket', id],
     queryFn:  () => api.get<Ticket>(`/tickets/${id}`).then(r => r.data),
+    enabled: !!id,
+  });
+
+  const { data: attachments = [], refetch: refetchAttachments } = useQuery<Attachment[]>({
+    queryKey: ['ticket-attachments', id],
+    queryFn:  () => api.get<Attachment[]>(`/tickets/${id}/attachments`).then(r => r.data),
     enabled: !!id,
   });
 
@@ -237,6 +291,34 @@ export default function TicketDetailPage() {
     onSuccess: (data, { action }) => { setAiResult(data.result); setAiAction(action); },
   });
 
+  async function handleAttachFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    if (attachInputRef.current) attachInputRef.current.value = '';
+
+    for (const file of files) {
+      const err = validateAttachFile(file);
+      if (err) { setAttachError(err); return; }
+    }
+    if (files.length > 5) { setAttachError('Max 5 files per upload.'); return; }
+
+    setAttachError(null);
+    setAttachUploading(true);
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    try {
+      await api.post(`/tickets/${id}/attachments`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      refetchAttachments();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setAttachError(msg ?? 'Upload failed. Please try again.');
+    } finally {
+      setAttachUploading(false);
+    }
+  }
+
   if (isLoading) return <DetailSkeleton />;
 
   if (isError || !ticket) {
@@ -251,6 +333,9 @@ export default function TicketDetailPage() {
       </Layout>
     );
   }
+
+  const canAttach = user?.roles.some(r => CAN_ATTACH_ROLES.has(r))
+    || ticket.requester.id === user?.sub;
 
   const allowed          = allowedTransitions(ticket.status);
   const canHold          = allowed.includes('ON_HOLD');
@@ -306,6 +391,87 @@ export default function TicketDetailPage() {
               <p className="text-sm text-ink-soft whitespace-pre-wrap leading-relaxed">
                 {ticket.description}
               </p>
+            </div>
+
+            {/* Attachments */}
+            <div className="bg-white rounded-xl border border-hair p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em]">
+                  Attachments{attachments.length > 0 && ` (${attachments.length})`}
+                </h2>
+                {canAttach && (
+                  <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs
+                                     font-medium cursor-pointer transition-colors
+                                     ${attachUploading
+                                       ? 'border-hair text-ink-muted opacity-50 cursor-not-allowed'
+                                       : 'border-indigo-200 bg-[#e0f0fe] text-indigo-600 hover:bg-[#d0e8fd]'}`}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 4v16m8-8H4" />
+                    </svg>
+                    {attachUploading ? 'Uploading…' : 'Add Attachment'}
+                    <input
+                      ref={attachInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                      onChange={handleAttachFiles}
+                      disabled={attachUploading}
+                      className="sr-only"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {attachError && (
+                <p className="mb-3 text-xs text-[#c0392b] bg-[#fff1f2] border border-[#fecdd3]
+                               rounded-lg px-3 py-2">
+                  {attachError}
+                </p>
+              )}
+
+              {attachments.length === 0 ? (
+                <p className="text-sm text-ink-muted">No attachments.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {attachments.map(att => {
+                    const isImage = att.mimeType.startsWith('image/');
+                    const downloadUrl = `${import.meta.env.VITE_API_URL ?? ''}/api/attachments/${att.id}/download`;
+                    return (
+                      <li key={att.id}
+                          className="flex items-start gap-3 rounded-lg border border-hair
+                                     px-3 py-2.5 hover:bg-[#fafafa] transition-colors">
+                        {isImage ? (
+                          <img
+                            src={downloadUrl}
+                            alt={att.filename}
+                            className="w-10 h-10 rounded object-cover shrink-0 border border-hair"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <AttachFileIcon mimeType={att.mimeType} className="w-5 h-5 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink truncate" title={att.filename}>
+                            {att.filename}
+                          </p>
+                          <p className="text-xs text-ink-muted mt-0.5">{formatBytes(att.sizeBytes)}</p>
+                        </div>
+                        <a
+                          href={downloadUrl}
+                          target={isImage ? '_blank' : undefined}
+                          rel="noopener noreferrer"
+                          download={isImage ? undefined : att.filename}
+                          className="shrink-0 text-xs text-indigo-600 hover:underline font-medium
+                                     mt-0.5 whitespace-nowrap"
+                        >
+                          {isImage ? 'View' : 'Download'}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
 
             {/* Confirm Resolution (EMPLOYEE only) */}

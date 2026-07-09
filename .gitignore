@@ -39,6 +39,9 @@ npm-debug.log*
 /prod-test.log
 apps/api/scripts/import/logs/
 
+# Uploaded files — never commit; persisted via Docker volume in prod
+/uploads/
+
 # OS
 .DS_Store
 Thumbs.db

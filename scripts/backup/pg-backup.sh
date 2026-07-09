@@ -24,6 +24,8 @@ PGDATABASE="${PGDATABASE:-ticketzilla}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 RETAIN_DAYS="${RETAIN_DAYS:-14}"
 
+UPLOADS_DIR="${UPLOADS_DIR:-/app/uploads}"
+
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 FILENAME="${PGDATABASE}_${TIMESTAMP}.dump"
 FILEPATH="${BACKUP_DIR}/${FILENAME}"
@@ -46,7 +48,17 @@ pg_dump \
 SIZE=$(du -h "${FILEPATH}" | cut -f1)
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Backup complete — ${FILENAME} (${SIZE})"
 
+# Back up uploaded attachments alongside the DB dump
+UPLOADS_ARCHIVE="${BACKUP_DIR}/uploads_${TIMESTAMP}.tar.gz"
+if [ -d "${UPLOADS_DIR}" ]; then
+  tar -czf "${UPLOADS_ARCHIVE}" -C "$(dirname "${UPLOADS_DIR}")" "$(basename "${UPLOADS_DIR}")"
+  USIZE=$(du -h "${UPLOADS_ARCHIVE}" | cut -f1)
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Uploads archived — uploads_${TIMESTAMP}.tar.gz (${USIZE})"
+else
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] WARN: uploads dir ${UPLOADS_DIR} not found — skipping"
+fi
+
 # Remove backups older than RETAIN_DAYS
-PRUNED=$(find "${BACKUP_DIR}" -maxdepth 1 -name "${PGDATABASE}_*.dump" \
+PRUNED=$(find "${BACKUP_DIR}" -maxdepth 1 \( -name "${PGDATABASE}_*.dump" -o -name "uploads_*.tar.gz" \) \
   -mtime "+${RETAIN_DAYS}" -print -delete | wc -l)
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Pruned ${PRUNED} backup(s) older than ${RETAIN_DAYS} days"

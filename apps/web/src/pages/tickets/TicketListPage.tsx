@@ -7,41 +7,41 @@ import { useAuth } from '../../auth/useAuth';
 import Pagination from '../../components/Pagination';
 
 interface TicketSummary {
-  id:        string;
-  subject:   string;
-  priority:  string;
-  status:    string;
-  category:  { id: string; name: string } | null;
+  id: string;
+  subject: string;
+  priority: string;
+  status: string;
+  category: { id: string; name: string } | null;
   requester: { id: string; name: string; email: string };
-  assignee:  { id: string; name: string; email: string } | null;
+  assignee: { id: string; name: string; email: string } | null;
   createdAt: string;
 }
 
 interface TicketsResponse {
-  total:      number;
-  page:       number;
-  limit:      number;
+  total: number;
+  page: number;
+  limit: number;
   totalPages: number;
-  data:       TicketSummary[];
+  data: TicketSummary[];
 }
 
 const PRIORITY_STYLES: Record<string, string> = {
-  LOW:      'bg-[#f2f2f7] text-[#6e6e73]',
-  MEDIUM:   'bg-[#e0f0fe] text-[#0071e3]',
-  HIGH:     'bg-[#fff2ea] text-[#b45309]',
+  LOW: 'bg-[#f2f2f7] text-[#6e6e73]',
+  MEDIUM: 'bg-[#e0f0fe] text-[#0071e3]',
+  HIGH: 'bg-[#fff2ea] text-[#b45309]',
   CRITICAL: 'bg-[#fff1f2] text-[#c0392b]',
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  NEW:         'bg-[#f2f2f7] text-[#6e6e73]',
-  ASSIGNED:    'bg-[#e0f0fe] text-[#0071e3]',
+  NEW: 'bg-[#f2f2f7] text-[#6e6e73]',
+  ASSIGNED: 'bg-[#e0f0fe] text-[#0071e3]',
   IN_PROGRESS: 'bg-[#eef0fb] text-[#3b5cc3]',
-  ON_HOLD:     'bg-[#fef9ec] text-[#b07800]',
-  ESCALATED:   'bg-[#fff2ea] text-[#b45309]',
-  RESOLVED:    'bg-[#eafaf3] text-[#1a7f4b]',
-  CLOSED:      'bg-[#f2f2f7] text-[#86868b]',
-  REOPENED:    'bg-[#f5f0fd] text-[#7c3aed]',
-  CANCELLED:   'bg-[#fff1f2] text-[#c0392b]',
+  ON_HOLD: 'bg-[#fef9ec] text-[#b07800]',
+  ESCALATED: 'bg-[#fff2ea] text-[#b45309]',
+  RESOLVED: 'bg-[#eafaf3] text-[#1a7f4b]',
+  CLOSED: 'bg-[#f2f2f7] text-[#86868b]',
+  REOPENED: 'bg-[#f5f0fd] text-[#7c3aed]',
+  CANCELLED: 'bg-[#fff1f2] text-[#c0392b]',
 };
 
 function Badge({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {

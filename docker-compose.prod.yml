@@ -90,6 +90,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:?set a strong JWT_SECRET}
       - AI_SERVICE_URL=http://ai-service:8001
       - FRONTEND_URL=${FRONTEND_URL:?set FRONTEND_URL}
+    volumes:
+      - ./uploads:/app/uploads   # persists uploaded attachments across container restarts
     ports:
       - "127.0.0.1:3000:3000"   # loopback only — front with a host TLS reverse proxy
     depends_on:

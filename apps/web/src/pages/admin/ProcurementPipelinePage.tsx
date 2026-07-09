@@ -187,6 +187,102 @@ function NewPrModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Review & Submit Modal (RAISED drafts — mostly auto-created stubs) ─────────
+
+const reviewSchema = z.object({
+  itemSpec:   z.string().min(3, 'At least 3 characters'),
+  quantity:   z.string().regex(/^\d+$/, 'Whole number').refine(v => Number(v) >= 1, 'At least 1'),
+  estCost:    z.string().regex(/^\d+(\.\d{1,2})?$/, 'e.g. 999.00').refine(v => Number(v) > 0, 'Must be greater than 0'),
+  budgetCode: z.string().min(1, 'Required').refine(v => v.trim().toUpperCase() !== 'TBD', 'Set a real budget code'),
+});
+type ReviewForm = z.infer<typeof reviewSchema>;
+
+function ReviewModal({ pr, onClose }: { pr: PurchaseRequest; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { register, handleSubmit, formState: { errors } } = useForm<ReviewForm>({
+    resolver: zodResolver(reviewSchema),
+    defaultValues: {
+      itemSpec:   pr.itemSpec,
+      quantity:   String(pr.quantity),
+      estCost:    pr.estCost === '0' ? '' : pr.estCost,
+      budgetCode: pr.budgetCode === 'TBD' ? '' : pr.budgetCode,
+    },
+  });
+  const mutation = useMutation({
+    mutationFn: async (v: ReviewForm) => {
+      await api.patch(`/purchase-requests/${pr.id}`, { ...v, quantity: Number(v.quantity) });
+      return api.post(`/purchase-requests/${pr.id}/submit`).then(r => r.data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['procurement-prs'] });
+      onClose();
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl border border-hair w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-hair">
+          <div>
+            <h2 className="font-semibold text-ink">Review &amp; Submit</h2>
+            <p className="text-xs text-ink-muted mt-0.5 font-mono">{pr.id}</p>
+          </div>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSubmit(v => mutation.mutate(v))} className="p-6 space-y-4">
+          <p className="text-xs text-ink-muted -mt-1">
+            {pr.deviceRequest
+              ? `Auto-raised because no ${pr.deviceRequest.deviceType} was in stock for ${pr.deviceRequest.requester.name}. Fill in real cost and budget before sending this into the approval chain.`
+              : 'Fill in real cost and budget before sending this into the approval chain.'}
+          </p>
+          <div>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Item
+            </label>
+            <input {...register('itemSpec')} type="text" className={inputCls} />
+            {errors.itemSpec && <p className="text-xs text-[#c0392b] mt-0.5">{errors.itemSpec.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Quantity
+              </label>
+              <input {...register('quantity')} type="text" inputMode="numeric" className={inputCls} />
+              {errors.quantity && <p className="text-xs text-[#c0392b] mt-0.5">{errors.quantity.message}</p>}
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+                Est. Cost (₹)
+              </label>
+              <input {...register('estCost')} type="text" inputMode="decimal" placeholder="999.00" className={inputCls} />
+              {errors.estCost && <p className="text-xs text-[#c0392b] mt-0.5">{errors.estCost.message}</p>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-ink-muted uppercase tracking-[0.06em] mb-1.5">
+              Budget Code
+            </label>
+            <input {...register('budgetCode')} type="text" placeholder="e.g. IT-2026-Q2" className={inputCls} />
+            {errors.budgetCode && <p className="text-xs text-[#c0392b] mt-0.5">{errors.budgetCode.message}</p>}
+          </div>
+          {mutation.isError && <p className="text-xs text-[#c0392b]">Failed to submit. Please try again.</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={mutation.isPending}
+              className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold
+                         hover:bg-indigo-700 disabled:opacity-50">
+              {mutation.isPending ? 'Submitting…' : 'Submit for Manager Approval'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-hair text-sm text-ink-soft hover:bg-[#fafafa]">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Record PO Modal ───────────────────────────────────────────────────────────
 
 const poSchema = z.object({
@@ -363,6 +459,7 @@ export default function ProcurementPipelinePage() {
   const [filter, setFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<PurchaseRequest | null>(null);
   const [poTarget, setPoTarget] = useState<PurchaseRequest | null>(null);
   const [receiveTarget, setReceiveTarget] = useState<PurchaseRequest | null>(null);
 
@@ -512,6 +609,15 @@ export default function ProcurementPipelinePage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex gap-2">
+                        {pr.status === 'RAISED' && (
+                          <button
+                            onClick={() => setReviewTarget(pr)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap
+                                       bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            Review &amp; Submit
+                          </button>
+                        )}
                         {pr.status === 'FINANCE_APPROVED' && (
                           <button
                             onClick={() => setPoTarget(pr)}
@@ -532,7 +638,7 @@ export default function ProcurementPipelinePage() {
                             Mark Received
                           </button>
                         )}
-                        {!['FINANCE_APPROVED', 'PO_RAISED'].includes(pr.status) && (
+                        {!['RAISED', 'FINANCE_APPROVED', 'PO_RAISED'].includes(pr.status) && (
                           <span className="text-ink-muted text-xs">—</span>
                         )}
                       </div>
@@ -550,6 +656,7 @@ export default function ProcurementPipelinePage() {
       )}
 
       {showNewModal && <NewPrModal onClose={() => setShowNewModal(false)} />}
+      {reviewTarget && <ReviewModal pr={reviewTarget} onClose={() => setReviewTarget(null)} />}
       {poTarget && <PoModal pr={poTarget} vendors={vendors} onClose={() => setPoTarget(null)} />}
       {receiveTarget && <ReceiveModal pr={receiveTarget} onClose={() => setReceiveTarget(null)} />}
     </Layout>
