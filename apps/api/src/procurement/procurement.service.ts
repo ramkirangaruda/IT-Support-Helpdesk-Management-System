@@ -104,6 +104,16 @@ export class ProcurementService {
   // ── Purchase Request CRUD ─────────────────────────────────────────────────
 
   async create(dto: CreatePurchaseRequestDto, actor: AuthenticatedUser) {
+    if (dto.deviceRequestId) {
+      const linked = await this.prisma.deviceRequest.findUnique({
+        where:  { id: dto.deviceRequestId },
+        select: { id: true },
+      });
+      if (!linked) {
+        throw new BadRequestException(`Device request ${dto.deviceRequestId} not found`);
+      }
+    }
+
     const id = await this.generatePrId();
 
     const pr = await this.prisma.purchaseRequest.create({
@@ -375,6 +385,8 @@ export class ProcurementService {
         `PO can only be raised when status is FINANCE_APPROVED (current: ${pr.status})`,
       );
     }
+    const vendor = await this.prisma.vendor.findUnique({ where: { id: dto.vendorId }, select: { id: true } });
+    if (!vendor) throw new BadRequestException(`Vendor ${dto.vendorId} not found`);
 
     const updated = await this.prisma.purchaseRequest.update({
       where:   { id },
