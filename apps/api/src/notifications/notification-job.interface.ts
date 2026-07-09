@@ -23,6 +23,7 @@ export interface EmailMeta {
   reason?: string;
   applicantName?: string;
   applicantEmail?: string;
+  tempPassword?: string;
   // Status-change context
   oldStatus?: string;
   newStatus?: string;

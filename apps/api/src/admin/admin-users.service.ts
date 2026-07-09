@@ -1,17 +1,28 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { AccountStatus, RoleName, UserStatus } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveUserDto } from './dto/approve-user.dto';
 import { AssignRoleDto, ListAllUsersDto } from './dto/assign-role.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { RejectUserDto } from './dto/reject-user.dto';
+
+const BCRYPT_ROUNDS = 12; // matches AuthService / seed.ts
+
+/** Strong, url-safe temporary password (~140 bits entropy) — same generator as prisma/seed.ts. */
+function generateTempPassword(): string {
+  return randomBytes(18).toString('base64url');
+}
 
 // Fields returned from pending-user queries — passwordHash excluded
 const PENDING_USER_SELECT = {
@@ -49,6 +60,78 @@ export class AdminUsersService {
       select: PENDING_USER_SELECT,
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /** IT_ADMIN/SYS_ADMIN creates an account directly — active immediately, no self-registration
+   *  step. A temporary password is generated here and emailed to the new user; it is never
+   *  returned in the API response. */
+  async createUser(
+    dto: CreateUserDto,
+    actor: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    const existing = await this.prisma.user.findFirst({
+      where: { email: { equals: dto.email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    // Same SYS_ADMIN-only rule as assignRole()
+    const callerIsSysAdmin = actor.roles.includes(RoleName.SYS_ADMIN);
+    if (dto.roles.includes(RoleName.SYS_ADMIN) && !callerIsSysAdmin) {
+      throw new ForbiddenException('Only a SYS_ADMIN can grant the SYS_ADMIN role');
+    }
+
+    const roles = await this.prisma.role.findMany({
+      where: { name: { in: dto.roles } },
+      select: { id: true, name: true },
+    });
+    if (roles.length !== dto.roles.length) {
+      throw new BadRequestException('One or more roles are invalid');
+    }
+
+    const tempPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          department: dto.department,
+          passwordHash,
+          accountStatus: AccountStatus.ACTIVE,
+          approvedById: actor.id,
+          approvedAt: new Date(),
+          // ssoSubject left null — this is a credentialed (email/password) account
+        },
+        select: { id: true, name: true, email: true },
+      });
+      await tx.userRole.createMany({
+        data: roles.map((r) => ({ userId: created.id, roleId: r.id })),
+      });
+      return created;
+    });
+
+    await this.audit.log({
+      actorId: actor.id,
+      entity: 'User',
+      entityId: user.id,
+      action: 'CREATE_USER',
+      before: null,
+      // Deliberately excludes the password — audit trail never stores credentials
+      after: { email: user.email, department: dto.department, roles: dto.roles },
+    });
+
+    await this.notifications.sendAdHoc(user.email, 'auth.account_created', {
+      toName:         user.name,
+      applicantEmail: user.email,
+      role:           dto.roles.join(', '),
+      tempPassword,
+    });
+
+    return { message: `Account created for ${user.email} — login details sent by email` };
   }
 
   async approve(

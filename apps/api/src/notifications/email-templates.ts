@@ -364,6 +364,44 @@ function accountApproved(ctx: BuildEmailCtx, frontendUrl: string): EmailContent 
   };
 }
 
+function credentialBox(email: string, password: string): string {
+  return `<table cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:16px 0;">
+    <tr><td style="padding:14px 16px;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;">
+        <tr>
+          <td style="padding:2px 0;color:#6b7280;font-size:12px;width:90px;">Email</td>
+          <td style="padding:2px 0;color:#111827;font-size:13px;font-family:monospace;">${email}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0 2px;color:#6b7280;font-size:12px;">Password</td>
+          <td style="padding:6px 0 2px;">
+            <span style="display:inline-block;background:#eef2ff;border-radius:4px;padding:5px 10px;font-family:monospace;font-size:14px;font-weight:700;color:#4f46e5;letter-spacing:0.02em;">${password}</span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>`;
+}
+
+function accountCreated(ctx: BuildEmailCtx, frontendUrl: string): EmailContent | null {
+  const { meta } = ctx;
+  const loginUrl = `${frontendUrl}/login`;
+  const html = layout(`
+    ${heading('An account has been created for you')}
+    ${para(`Hi ${meta.toName ?? 'there'},`)}
+    ${para('An administrator has created a TicketZilla account on your behalf. Use the credentials below to sign in.')}
+    ${credentialBox(meta.applicantEmail ?? '', meta.tempPassword ?? '')}
+    ${meta.role ? kvTable([['Assigned Role', meta.role]]) : ''}
+    ${warningBanner('This is a temporary password. Keep it private and avoid sharing it over chat or email once you’ve signed in.')}
+    ${btn(loginUrl, 'Sign In')}
+  `);
+  return {
+    subject: '[TicketZilla] Your Account Has Been Created',
+    html,
+    text: `Hi ${meta.toName ?? 'there'},\n\nAn administrator has created a TicketZilla account for you.\n\nEmail: ${meta.applicantEmail ?? ''}\nPassword: ${meta.tempPassword ?? ''}\n${meta.role ? `Role: ${meta.role}\n` : ''}\nSign in: ${loginUrl}\n\nThis is a temporary password — keep it private.`,
+  };
+}
+
 function accountRejected(ctx: BuildEmailCtx, frontendUrl: string): EmailContent | null {
   const { meta } = ctx;
   void frontendUrl;
@@ -658,6 +696,7 @@ export function buildEmail(
     case 'ticket.escalated':     return ticketEscalated(ctx, frontendUrl);
 
     // Auth events
+    case 'auth.account_created':           return accountCreated(ctx, frontendUrl);
     case 'auth.account_approved':          return accountApproved(ctx, frontendUrl);
     case 'auth.account_rejected':          return accountRejected(ctx, frontendUrl);
     case 'auth.registration_pending':      return registrationPending(ctx, frontendUrl);
